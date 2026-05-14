@@ -1,6 +1,6 @@
 services:
   api-monitor:
-    image: ${API_MONITOR_IMAGE:-ghcr.io/your-github-username/api-monitor-worker:latest}
+    image: ${API_MONITOR_IMAGE:-ghcr.io/andlu155/api-monitor-worker:latest}
     container_name: api-monitor
     ports:
       - "3060:3000"
