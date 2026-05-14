@@ -6,12 +6,15 @@
     <title>API Monitor Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #0b0c10; color: #c5c6c7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-        .card { background-color: #121418; border: 1px solid #1f2329; border-radius: 0.5rem; }
-        .panel { background-color: #11141a; border: 1px solid #252a33; border-radius: 0.5rem; }
-        .channel-card { background-color: #1a1d24; border-radius: 0.375rem; }
-        .field { width: 100%; background: #0b0c10; border: 1px solid #2b313b; border-radius: 0.375rem; color: #f3f4f6; padding: 0.55rem 0.65rem; outline: none; }
-        .field:focus { border-color: #22c55e; box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25); }
+        body { background: #0b0c10; color: #d6d8dc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Roboto, Arial, sans-serif; font-size: 13px; line-height: 1.5; }
+        .card { background: #141821; border: 1px solid #29313d; border-radius: 8px; box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2); }
+        .panel { background: #111720; border: 1px solid #2d3542; border-radius: 8px; }
+        .channel-card { background: #1b2130; border: 1px solid #30394a; border-radius: 6px; }
+        .field { width: 100%; background: #0b0f16; border: 1px solid #364153; border-radius: 6px; color: #f8fafc; padding: 0.6rem 0.7rem; outline: none; }
+        .field:focus { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22); }
+        .option-row { background: #0f141d; border: 1px solid #29313d; border-radius: 8px; padding: 0.65rem; }
+        .choice { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid #364153; border-radius: 999px; padding: 0.35rem 0.6rem; color: #dbe1ea; background: #111827; }
+        .dragging { opacity: 0.45; }
         .text-neon-green { color: #39ff14; }
         .text-neon-red { color: #ff3333; }
         .text-neon-orange { color: #ff9900; }
@@ -21,18 +24,18 @@
         .history-bar { width: 3px; height: 12px; display: inline-block; margin-right: 1px; border-radius: 1px; }
     </style>
 </head>
-<body class="p-4 text-xs">
+<body class="p-4">
     <div id="app" class="max-w-[1800px] mx-auto">
         <div class="flex flex-col gap-3 mb-4 border-b border-gray-800 pb-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="flex flex-wrap items-center gap-3">
-                <span class="text-white font-bold text-base">概览</span>
-                <span class="text-gray-400" id="stats-overview">0模型 · 0渠道</span>
-                <div class="bg-gray-800 px-2 py-0.5 rounded text-[10px] font-mono max-w-full truncate">
+                <span class="text-white font-bold text-lg">API Monitor</span>
+                <span class="text-gray-300" id="stats-overview">0 模型 · 0 渠道</span>
+                <div class="bg-gray-800 px-2.5 py-1 rounded text-[11px] font-mono max-w-full truncate">
                     目标 <span class="text-gray-300" id="api-url">...</span>
                 </div>
-                <div class="bg-gray-800 px-2 py-0.5 rounded text-[10px] font-mono" id="config-summary">配置加载中</div>
+                <div class="bg-gray-800 px-2.5 py-1 rounded text-[11px] font-mono" id="config-summary">配置加载中</div>
             </div>
-            <div class="flex flex-wrap items-center gap-2 text-gray-400 text-[10px]">
+            <div class="flex flex-wrap items-center gap-2 text-gray-300 text-[12px]">
                 <span>更新于 <span id="last-update">...</span></span>
                 <span>|</span>
                 <span id="poll-interval-display">1m 轮询</span>
@@ -48,11 +51,11 @@
     </div>
 
     <div id="modal" class="hidden fixed inset-0 z-50 bg-black/70 p-4 overflow-y-auto">
-        <div class="panel mx-auto my-4 max-w-6xl p-4">
+        <div class="panel mx-auto my-4 max-w-7xl p-4">
             <div class="flex items-center justify-between border-b border-gray-800 pb-3 mb-4">
                 <div>
-                    <div class="text-white text-base font-bold">配置管理</div>
-                    <div class="text-gray-500 text-[11px] mt-1">API Key 留空表示不修改；供应商可直接输入自定义分组。</div>
+                    <div class="text-white text-lg font-bold">配置管理</div>
+                    <div class="text-gray-400 text-[12px] mt-1">API Key 留空表示不修改；供应商和渠道在下方独立维护，模型可勾选多个渠道。</div>
                 </div>
                 <button id="close-modal-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700">关闭</button>
             </div>
@@ -68,18 +71,41 @@
                     <label class="block"><span class="block text-gray-400 mb-1">目标 API URL</span><input id="targetApiUrl" class="field" placeholder="https://example.com/v1"></label>
                     <label class="block"><span class="block text-gray-400 mb-1">API Key <span id="api-key-mask" class="text-gray-600"></span></span><input id="apiKey" class="field" type="password" placeholder="留空表示不修改"></label>
                     <label class="block"><span class="block text-gray-400 mb-1">轮询间隔（分钟）</span><input id="pollIntervalMinutes" class="field" type="number" min="1" max="1440"></label>
-                    <label class="block"><span class="block text-gray-400 mb-1">请求超时（毫秒）</span><input id="requestTimeoutMs" class="field" type="number" min="1000" max="60000" step="500"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">请求超时（秒）</span><input id="requestTimeoutMs" class="field" type="number" min="1" max="60" step="0.5"></label>
                     <label class="block"><span class="block text-gray-400 mb-1">最大检测模型数</span><input id="maxModelsToPing" class="field" type="number" min="1" max="200"></label>
                     <label class="block"><span class="block text-gray-400 mb-1">最大并发</span><input id="maxConcurrency" class="field" type="number" min="1" max="50"></label>
-                    <label class="block"><span class="block text-gray-400 mb-1">警告阈值（毫秒）</span><input id="warnLatencyMs" class="field" type="number" min="1" max="60000" step="100"></label>
-                    <label class="block"><span class="block text-gray-400 mb-1">异常阈值（毫秒）</span><input id="errorLatencyMs" class="field" type="number" min="1" max="120000" step="100"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">警告阈值（秒）</span><input id="warnLatencyMs" class="field" type="number" min="0.1" max="60" step="0.1"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">异常阈值（秒）</span><input id="errorLatencyMs" class="field" type="number" min="0.1" max="120" step="0.1"></label>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <section class="panel p-3">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <div class="text-white font-bold">供应商管理</div>
+                                <div class="text-[11px] text-gray-500">用于模型供应商选择，已被模型使用的选项不能删除。</div>
+                            </div>
+                            <button type="button" id="add-provider-btn" class="px-2.5 py-1.5 rounded bg-gray-800 text-gray-100 hover:bg-gray-700">添加供应商</button>
+                        </div>
+                        <div id="providers-config-list" class="space-y-2"></div>
+                    </section>
+                    <section class="panel p-3">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <div class="text-white font-bold">渠道管理</div>
+                                <div class="text-[11px] text-gray-500">模型可勾选多个渠道，渠道顺序会影响模型内展示顺序。</div>
+                            </div>
+                            <button type="button" id="add-channel-btn" class="px-2.5 py-1.5 rounded bg-gray-800 text-gray-100 hover:bg-gray-700">添加渠道</button>
+                        </div>
+                        <div id="channels-config-list" class="space-y-2"></div>
+                    </section>
                 </div>
 
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <div>
                             <div class="text-white font-bold">模型配置</div>
-                            <div class="text-[10px] text-gray-500 mt-1">供应商排序：OpenAI、Google、DeepSeek、MiniMax、Anthropic、Midjourney、其他/自定义。模型排序数值越小越靠前。</div>
+                            <div class="text-[11px] text-gray-500 mt-1">拖拽左侧手柄调整模型顺序；一个模型可勾选多个渠道，保存时会生成独立检测项。</div>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <button type="button" id="discover-models-btn" class="px-2 py-1 rounded bg-green-700 text-white hover:bg-green-600">自动获取模型</button>
@@ -87,14 +113,14 @@
                         </div>
                     </div>
                     <div class="overflow-x-auto border border-gray-800 rounded">
-                        <table class="w-full min-w-[900px] text-left">
+                        <table class="w-full min-w-[960px] text-left">
                             <thead class="bg-gray-900 text-gray-500 uppercase text-[10px]">
                                 <tr>
+                                    <th class="p-2 w-14">排序</th>
                                     <th class="p-2 w-16">启用</th>
                                     <th class="p-2">模型</th>
                                     <th class="p-2 w-44">供应商</th>
-                                    <th class="p-2 w-40">渠道</th>
-                                    <th class="p-2 w-28">模型排序</th>
+                                    <th class="p-2">渠道</th>
                                     <th class="p-2 w-20">操作</th>
                                 </tr>
                             </thead>
@@ -112,26 +138,29 @@
         </div>
     </div>
 
-    <datalist id="provider-options">
-        <option value="OPENAI"></option>
-        <option value="GOOGLE"></option>
-        <option value="DEEPSEEK"></option>
-        <option value="MINIMAXAI"></option>
-        <option value="ANTHROPIC"></option>
-        <option value="MIDJOURNEY"></option>
-        <option value="OTHER"></option>
-    </datalist>
-
     <script>
-        const state = { token: localStorage.getItem('adminToken') || '', config: null, fetchInterval: null };
+        const state = { token: localStorage.getItem('adminToken') || '', config: null, fetchInterval: null, draggingRow: null };
         const $ = (id) => document.getElementById(id);
 
         $('config-btn').addEventListener('click', openConfig);
         $('close-modal-btn').addEventListener('click', () => $('modal').classList.add('hidden'));
         $('login-btn').addEventListener('click', login);
         $('discover-models-btn').addEventListener('click', discoverModels);
+        $('add-provider-btn').addEventListener('click', () => {
+            syncOptionsFromDom();
+            state.config.providers.push(nextOption('PROVIDER', '新供应商', state.config.providers));
+            renderOptionManagers();
+            renderConfigModels();
+        });
+        $('add-channel-btn').addEventListener('click', () => {
+            syncOptionsFromDom();
+            state.config.channels.push(nextOption('CHANNEL', '新渠道', state.config.channels));
+            renderOptionManagers();
+            renderConfigModels();
+        });
         $('add-model-btn').addEventListener('click', () => {
-            state.config.models.push({ name: '', provider: 'OTHER', channel: 'DEFAULT', enabled: true, sortOrder: nextSortOrder() });
+            syncOptionsFromDom();
+            state.config.models.push({ name: '', provider: firstOptionId(state.config.providers, 'OTHER'), channel: firstOptionId(state.config.channels, 'DEFAULT'), enabled: true, sortOrder: nextSortOrder() });
             renderConfigModels();
         });
         $('config-form').addEventListener('submit', async (event) => { event.preventDefault(); await saveConfig(false); });
@@ -162,7 +191,7 @@
 
         function renderSummary(summary) {
             if (!summary) return;
-            $('config-summary').textContent = `${summary.enabledModels}/${summary.configuredModels} 启用 · 超时 ${summary.requestTimeoutMs}ms · 阈值 ${summary.thresholds.warnLatencyMs}/${summary.thresholds.errorLatencyMs}ms`;
+            $('config-summary').textContent = `${summary.enabledModels}/${summary.configuredModels} 启用 · 超时 ${formatSeconds(summary.requestTimeoutMs)}s · 阈值 ${formatSeconds(summary.thresholds.warnLatencyMs)}/${formatSeconds(summary.thresholds.errorLatencyMs)}s`;
         }
 
         async function openConfig() {
@@ -232,7 +261,7 @@
                 const response = await fetch('/api/check-now', { method: 'POST', headers: authHeaders() });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || '检测失败');
-                showNotice(`检测完成：${data.count} 个模型`, 'success');
+                showNotice(`检测完成：${data.count} 个检测项`, 'success');
                 await fetchData();
             } catch (error) {
                 showNotice(error.message, 'error');
@@ -248,13 +277,16 @@
                     body: JSON.stringify({
                         targetApiUrl: $('targetApiUrl').value,
                         apiKey: $('apiKey').value,
-                        requestTimeoutMs: numberValue('requestTimeoutMs'),
+                        requestTimeoutMs: secondsToMs(numberValue('requestTimeoutMs')),
                         maxModelsToPing: numberValue('maxModelsToPing'),
                     }),
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || '获取模型失败');
+                syncOptionsFromDom();
                 state.config.models = sortModels(mergeDiscoveredModels(state.config.models || [], data.models || []));
+                data.models.forEach((model) => ensureProviderOption(model.provider));
+                renderOptionManagers();
                 renderConfigModels();
                 setConfigMessage(`已获取 ${data.models.length} 个模型，请保存配置`, false);
             } catch (error) {
@@ -268,59 +300,94 @@
             $('apiKey').value = '';
             $('api-key-mask').textContent = config.apiKeyMasked ? `当前 ${config.apiKeyMasked}` : '未设置';
             $('pollIntervalMinutes').value = config.pollIntervalMinutes;
-            $('requestTimeoutMs').value = config.requestTimeoutMs;
+            $('requestTimeoutMs').value = msToSeconds(config.requestTimeoutMs);
             $('maxModelsToPing').value = config.maxModelsToPing;
             $('maxConcurrency').value = config.maxConcurrency;
-            $('warnLatencyMs').value = config.thresholds.warnLatencyMs;
-            $('errorLatencyMs').value = config.thresholds.errorLatencyMs;
+            $('warnLatencyMs').value = msToSeconds(config.thresholds.warnLatencyMs);
+            $('errorLatencyMs').value = msToSeconds(config.thresholds.errorLatencyMs);
+            renderOptionManagers();
             renderConfigModels();
         }
 
         function collectConfigForm() {
+            syncOptionsFromDom();
             return {
                 targetApiUrl: $('targetApiUrl').value,
                 apiKey: $('apiKey').value,
                 pollIntervalMinutes: numberValue('pollIntervalMinutes'),
-                requestTimeoutMs: numberValue('requestTimeoutMs'),
+                requestTimeoutMs: secondsToMs(numberValue('requestTimeoutMs')),
                 maxModelsToPing: numberValue('maxModelsToPing'),
                 maxConcurrency: numberValue('maxConcurrency'),
-                thresholds: { warnLatencyMs: numberValue('warnLatencyMs'), errorLatencyMs: numberValue('errorLatencyMs') },
-                models: sortModels(Array.from(document.querySelectorAll('[data-model-row]')).map((row) => ({
-                    enabled: row.querySelector('[data-field="enabled"]').checked,
-                    name: row.querySelector('[data-field="name"]').value,
-                    provider: row.querySelector('[data-field="provider"]').value,
-                    channel: row.querySelector('[data-field="channel"]').value,
-                    sortOrder: numberFromInput(row.querySelector('[data-field="sortOrder"]').value, 9999),
-                })).filter((model) => model.name.trim())),
+                thresholds: {
+                    warnLatencyMs: secondsToMs(numberValue('warnLatencyMs')),
+                    errorLatencyMs: secondsToMs(numberValue('errorLatencyMs')),
+                },
+                providers: state.config.providers,
+                channels: state.config.channels,
+                models: collectGroupedModels(),
             };
+        }
+
+        function renderOptionManagers() {
+            renderOptionList('providers-config-list', state.config.providers || [], 'provider');
+            renderOptionList('channels-config-list', state.config.channels || [], 'channel');
+        }
+
+        function renderOptionList(containerId, options, type) {
+            const container = $(containerId);
+            const used = usedOptionIds(type);
+            container.innerHTML = '';
+            options.forEach((option, index) => {
+                const row = document.createElement('div');
+                row.className = 'option-row grid grid-cols-1 sm:grid-cols-[140px_1fr_auto] gap-2 items-center';
+                row.dataset.optionType = type;
+                row.innerHTML = `
+                    <input data-option-field="id" class="field font-mono text-[12px]" value="${escapeHtml(option.id)}">
+                    <input data-option-field="label" class="field" value="${escapeHtml(option.label)}">
+                    <button type="button" class="px-2 py-1 rounded bg-red-900/40 text-red-300">删除</button>
+                `;
+                row.querySelector('button').addEventListener('click', () => {
+                    syncOptionsFromDom();
+                    if (used.has(normalizeId(option.id))) {
+                        setConfigMessage(`${type === 'provider' ? '供应商' : '渠道'}正在被模型使用，不能删除`, true);
+                        return;
+                    }
+                    const list = type === 'provider' ? state.config.providers : state.config.channels;
+                    list.splice(index, 1);
+                    renderOptionManagers();
+                    renderConfigModels();
+                });
+                row.querySelectorAll('input').forEach((input) => input.addEventListener('change', () => {
+                    syncOptionsFromDom();
+                    renderConfigModels();
+                }));
+                container.appendChild(row);
+            });
         }
 
         function renderConfigModels() {
             const body = $('models-config-body');
             body.innerHTML = '';
-            state.config.models = sortModels(state.config.models || []);
-            state.config.models.forEach((model, index) => {
+            groupModelsForEditor(state.config.models || []).forEach((group, index) => {
                 const row = document.createElement('tr');
-                row.className = 'border-t border-gray-800';
+                row.className = 'border-t border-gray-800 align-top';
                 row.dataset.modelRow = 'true';
+                row.draggable = true;
                 row.innerHTML = `
-                    <td class="p-2"><input data-field="enabled" type="checkbox" ${model.enabled ? 'checked' : ''}></td>
-                    <td class="p-2"><input data-field="name" class="field" value="${escapeHtml(model.name)}"></td>
-                    <td class="p-2">
-                        <input data-field="provider" class="field" list="provider-options" value="${escapeHtml(model.provider || 'OTHER')}">
-                        <div class="text-[10px] text-gray-500 mt-1">${escapeHtml(labelProvider(model.provider))}</div>
-                    </td>
-                    <td class="p-2">
-                        <input data-field="channel" class="field" value="${escapeHtml(model.channel || 'DEFAULT')}">
-                        <div class="text-[10px] text-gray-500 mt-1">${escapeHtml(labelChannel(model.channel))}</div>
-                    </td>
-                    <td class="p-2"><input data-field="sortOrder" class="field" type="number" value="${Number.isFinite(Number(model.sortOrder)) ? Number(model.sortOrder) : 9999}"></td>
+                    <td class="p-2"><button type="button" class="drag-handle px-2 py-1 rounded bg-gray-800 text-gray-300 cursor-grab" title="拖拽排序">::</button></td>
+                    <td class="p-2 pt-4"><input data-field="enabled" type="checkbox" ${group.enabled ? 'checked' : ''}></td>
+                    <td class="p-2"><input data-field="name" class="field" value="${escapeHtml(group.name)}"></td>
+                    <td class="p-2"><select data-field="provider" class="field">${renderProviderOptions(group.provider)}</select></td>
+                    <td class="p-2"><div class="flex flex-wrap gap-2">${renderChannelChoices(group.channels)}</div></td>
                     <td class="p-2"><button type="button" class="px-2 py-1 rounded bg-red-900/40 text-red-300">删除</button></td>
                 `;
-                row.querySelector('button').addEventListener('click', () => {
-                    state.config.models.splice(index, 1);
+                row.querySelector('td:last-child button').addEventListener('click', () => {
+                    state.config.models = groupModelsForEditor(state.config.models || [])
+                        .filter((_, groupIndex) => groupIndex !== index)
+                        .flatMap(expandGroup);
                     renderConfigModels();
                 });
+                addDragHandlers(row);
                 body.appendChild(row);
             });
         }
@@ -334,15 +401,15 @@
 
             if (sortedModels.length === 0) {
                 grid.innerHTML = '<div class="text-center col-span-full py-6 text-gray-500">暂无检测数据</div>';
-                $('stats-overview').textContent = '0模型 · 0渠道';
+                $('stats-overview').textContent = '0 模型 · 0 渠道';
                 return;
             }
 
             sortedModels.forEach((model) => {
                 let channelsHtml = '';
-                let historyHtml = '<div class="mt-2"><div class="text-[9px] text-gray-500 mb-1 font-mono tracking-wider">HISTORY</div>';
+                let historyHtml = '<div class="mt-3"><div class="text-[10px] text-gray-500 mb-1 font-mono tracking-wider">HISTORY</div>';
 
-                model.channels.forEach((channel) => {
+                sortChannels(model.channels || []).forEach((channel) => {
                     channelCount++;
                     const isError = channel.status === 'error';
                     const isWarn = channel.status === 'warn';
@@ -350,27 +417,27 @@
                     const statusBg = isError ? 'bg-red-900/30 text-neon-red' : (isWarn ? 'bg-orange-900/30 text-neon-orange' : 'bg-green-900/30 text-neon-green');
                     const statusText = isError ? '异常' : (isWarn ? '延迟' : '正常');
                     const latencySec = formatLatency(channel.latency);
-                    const errorHtml = channel.error ? `<div class="mt-1 text-[10px] text-red-300 truncate" title="${escapeHtml(channel.error)}">${escapeHtml(channel.error)}</div>` : '';
+                    const errorHtml = channel.error ? `<div class="mt-1 text-[11px] text-red-300 truncate" title="${escapeHtml(channel.error)}">${escapeHtml(channel.error)}</div>` : '';
 
                     channelsHtml += `
                         <div class="mb-3">
                             <div class="flex justify-between items-center mb-1.5">
-                                <span class="font-bold text-gray-300 tracking-wider text-xs">${escapeHtml(labelChannel(channel.name))}</span>
-                                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${statusBg}">● ${statusText}</span>
+                                <span class="font-bold text-gray-200 tracking-wide text-[13px]">${escapeHtml(labelChannel(channel.name))}</span>
+                                <span class="px-1.5 py-0.5 rounded text-[11px] font-medium tracking-wide ${statusBg}">● ${statusText}</span>
                             </div>
-                            <div class="channel-card p-2">
-                                <div class="text-gray-500 text-[10px] mb-0.5 font-mono">对话延迟</div>
-                                <div class="text-base font-bold font-mono tracking-tighter ${statusColor}">${latencySec} s</div>
-                                <div class="flex justify-between text-[10px] text-gray-500 border-t border-gray-700/50 pt-1.5 mt-1.5 font-mono">
+                            <div class="channel-card p-2.5">
+                                <div class="text-gray-400 text-[11px] mb-0.5 font-mono">对话延迟</div>
+                                <div class="text-2xl font-bold font-mono ${statusColor}">${latencySec}s</div>
+                                <div class="flex justify-between text-[11px] text-gray-400 border-t border-gray-700/50 pt-1.5 mt-1.5 font-mono">
                                     <div>可用 <span class="${statusColor} ml-0.5 font-bold">${channel.availability}%</span></div>
-                                    <div>PING <span class="${statusColor} ml-0.5 font-bold">${latencySec} s</span></div>
+                                    <div>PING <span class="${statusColor} ml-0.5 font-bold">${latencySec}s</span></div>
                                 </div>
                                 ${errorHtml}
                             </div>
                         </div>
                     `;
 
-                    historyHtml += `<div class="flex items-center mb-0.5"><span class="w-10 text-[9px] text-gray-400 truncate pr-1 font-mono">${escapeHtml(labelChannel(channel.name))}</span><div class="flex-1 flex gap-[1px]">`;
+                    historyHtml += `<div class="flex items-center mb-0.5"><span class="w-16 text-[10px] text-gray-400 truncate pr-1 font-mono">${escapeHtml(labelChannel(channel.name))}</span><div class="flex-1 flex gap-[1px]">`;
                     const history = channel.history || [];
                     for (let i = 0; i < 60 - history.length; i++) historyHtml += '<span class="history-bar bg-gray-800"></span>';
                     history.forEach((h) => {
@@ -387,10 +454,10 @@
                 card.className = 'card p-4';
                 card.innerHTML = `
                     <div class="flex items-center gap-2.5 mb-4">
-                        <div class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xl font-bold">${escapeHtml(getProviderInitial(model.provider))}</div>
+                        <div class="w-9 h-9 rounded-full bg-gray-800 flex items-center justify-center text-xl font-bold">${escapeHtml(getProviderInitial(model.provider))}</div>
                         <div class="min-w-0">
-                            <div class="text-[10px] text-gray-500 font-mono tracking-widest uppercase leading-none mb-0.5">${escapeHtml(labelProvider(model.provider))}</div>
-                            <div class="text-sm font-bold text-white tracking-wide leading-tight break-words">${escapeHtml(model.name)}</div>
+                            <div class="text-[11px] text-gray-500 font-mono tracking-widest uppercase leading-none mb-1">${escapeHtml(labelProvider(model.provider))}</div>
+                            <div class="text-base font-bold text-white leading-tight break-words">${escapeHtml(model.name)}</div>
                         </div>
                     </div>
                     ${channelsHtml}
@@ -399,7 +466,101 @@
                 grid.appendChild(card);
             });
 
-            $('stats-overview').textContent = `${sortedModels.length}模型 · ${channelCount}渠道`;
+            $('stats-overview').textContent = `${sortedModels.length} 模型 · ${channelCount} 渠道`;
+        }
+
+        function syncOptionsFromDom() {
+            if (!state.config) return;
+            state.config.providers = collectOptions('provider');
+            state.config.channels = collectOptions('channel');
+        }
+
+        function collectOptions(type) {
+            const fallback = type === 'provider' ? [{ id: 'OTHER', label: '其他' }] : [{ id: 'DEFAULT', label: '默认渠道' }];
+            const seen = new Set();
+            const options = Array.from(document.querySelectorAll(`[data-option-type="${type}"]`)).map((row) => {
+                const id = normalizeId(row.querySelector('[data-option-field="id"]').value);
+                const label = row.querySelector('[data-option-field="label"]').value.trim() || id;
+                return { id, label };
+            }).filter((option) => {
+                if (!option.id || seen.has(option.id)) return false;
+                seen.add(option.id);
+                return true;
+            });
+            return options.length ? options : fallback;
+        }
+
+        function collectGroupedModels() {
+            const expanded = [];
+            Array.from(document.querySelectorAll('[data-model-row]')).forEach((row, index) => {
+                const name = row.querySelector('[data-field="name"]').value.trim();
+                if (!name) return;
+                const provider = row.querySelector('[data-field="provider"]').value;
+                const enabled = row.querySelector('[data-field="enabled"]').checked;
+                const selectedChannels = Array.from(row.querySelectorAll('[data-field="channel"]:checked')).map((input) => input.value);
+                const channels = selectedChannels.length ? selectedChannels : [firstOptionId(state.config.channels, 'DEFAULT')];
+                channels.forEach((channel) => expanded.push({ name, provider, channel, enabled, sortOrder: (index + 1) * 10 }));
+            });
+            return expanded;
+        }
+
+        function groupModelsForEditor(models) {
+            const map = new Map();
+            sortModels(models || []).forEach((model) => {
+                const key = model.name || `__empty_${map.size}`;
+                if (!map.has(key)) {
+                    map.set(key, {
+                        name: model.name || '',
+                        provider: model.provider || firstOptionId(state.config.providers, 'OTHER'),
+                        channels: [],
+                        enabled: model.enabled !== false,
+                        sortOrder: numberFromInput(model.sortOrder, 9999),
+                    });
+                }
+                const group = map.get(key);
+                const channel = model.channel || firstOptionId(state.config.channels, 'DEFAULT');
+                if (!group.channels.includes(channel)) group.channels.push(channel);
+                group.enabled = group.enabled || model.enabled !== false;
+            });
+            return Array.from(map.values());
+        }
+
+        function expandGroup(group, index) {
+            const channels = group.channels.length ? group.channels : [firstOptionId(state.config.channels, 'DEFAULT')];
+            return channels.map((channel) => ({ name: group.name, provider: group.provider, channel, enabled: group.enabled, sortOrder: (index + 1) * 10 }));
+        }
+
+        function renderProviderOptions(selected) {
+            return (state.config.providers || []).map((provider) => `<option value="${escapeHtml(provider.id)}" ${normalizeId(provider.id) === normalizeId(selected) ? 'selected' : ''}>${escapeHtml(provider.label)}</option>`).join('');
+        }
+
+        function renderChannelChoices(selectedChannels) {
+            const selected = new Set((selectedChannels || []).map(normalizeId));
+            return (state.config.channels || []).map((channel) => `
+                <label class="choice">
+                    <input data-field="channel" type="checkbox" value="${escapeHtml(channel.id)}" ${selected.has(normalizeId(channel.id)) ? 'checked' : ''}>
+                    <span>${escapeHtml(channel.label)}</span>
+                </label>
+            `).join('');
+        }
+
+        function addDragHandlers(row) {
+            row.addEventListener('dragstart', () => {
+                state.draggingRow = row;
+                row.classList.add('dragging');
+            });
+            row.addEventListener('dragend', () => {
+                row.classList.remove('dragging');
+                state.draggingRow = null;
+            });
+            row.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                const dragging = state.draggingRow;
+                if (!dragging || dragging === row) return;
+                const rect = row.getBoundingClientRect();
+                const after = event.clientY > rect.top + rect.height / 2;
+                row.parentNode.insertBefore(dragging, after ? row.nextSibling : row);
+            });
         }
 
         function mergeDiscoveredModels(existing, discovered) {
@@ -417,18 +578,48 @@
                 if (providerDelta !== 0) return providerDelta;
                 const sortDelta = numberFromInput(left.sortOrder, 9999) - numberFromInput(right.sortOrder, 9999);
                 if (sortDelta !== 0) return sortDelta;
-                return String(left.name || '').localeCompare(String(right.name || ''));
+                const nameDelta = String(left.name || '').localeCompare(String(right.name || ''));
+                if (nameDelta !== 0) return nameDelta;
+                return optionIndex(left.channel, state.config?.channels || []) - optionIndex(right.channel, state.config?.channels || []);
             });
+        }
+
+        function sortChannels(channels) {
+            return [...channels].sort((left, right) => optionIndex(left.name, state.config?.channels || []) - optionIndex(right.name, state.config?.channels || []));
         }
 
         function providerSortOrder(provider) {
             const order = { OPENAI: 10, GOOGLE: 20, DEEPSEEK: 30, MINIMAXAI: 40, ANTHROPIC: 50, MIDJOURNEY: 60, OTHER: 999 };
-            return order[String(provider || 'OTHER').trim().toUpperCase()] || 900;
+            return order[normalizeId(provider)] || 900;
         }
 
         function nextSortOrder() {
             const values = (state.config.models || []).map((model) => numberFromInput(model.sortOrder, 0));
             return Math.max(0, ...values) + 10;
+        }
+
+        function nextOption(prefix, label, options) {
+            let index = options.length + 1;
+            let id = `${prefix}_${index}`;
+            const existing = new Set(options.map((option) => normalizeId(option.id)));
+            while (existing.has(id)) {
+                index++;
+                id = `${prefix}_${index}`;
+            }
+            return { id, label: `${label}${index}` };
+        }
+
+        function usedOptionIds(type) {
+            if (type === 'provider') {
+                return new Set(collectGroupedModels().map((model) => normalizeId(model.provider)));
+            }
+            return new Set(collectGroupedModels().map((model) => normalizeId(model.channel)));
+        }
+
+        function ensureProviderOption(provider) {
+            const id = normalizeId(provider);
+            if (!id || state.config.providers.some((option) => normalizeId(option.id) === id)) return;
+            state.config.providers.push({ id, label: id });
         }
 
         function showLogin() { $('login-view').classList.remove('hidden'); $('config-form').classList.add('hidden'); }
@@ -451,13 +642,15 @@
         }
 
         function labelProvider(provider) {
+            const option = (state.config?.providers || []).find((item) => normalizeId(item.id) === normalizeId(provider));
             const labels = { OPENAI: 'OpenAI', GOOGLE: 'Google', DEEPSEEK: 'DeepSeek', MINIMAXAI: 'MiniMax', ANTHROPIC: 'Anthropic', MIDJOURNEY: 'Midjourney', OTHER: '其他' };
-            return labels[String(provider || '').trim().toUpperCase()] || provider || '其他';
+            return option?.label || labels[normalizeId(provider)] || provider || '其他';
         }
 
         function labelChannel(channel) {
+            const option = (state.config?.channels || []).find((item) => normalizeId(item.id) === normalizeId(channel));
             const labels = { DEFAULT: '默认渠道', PLUS: '增强渠道', VIP: '高级渠道', CLAUDE: 'Claude 渠道', GEMINI: 'Gemini 渠道', FAST: '快速渠道' };
-            return labels[String(channel || '').trim().toUpperCase()] || channel || '默认渠道';
+            return option?.label || labels[normalizeId(channel)] || channel || '默认渠道';
         }
 
         function getProviderInitial(provider) {
@@ -465,9 +658,18 @@
             return text ? text.charAt(0).toUpperCase() : '?';
         }
 
-        function formatLatency(ms) { return (Number(ms || 0) / 1000).toFixed(2); }
+        function formatLatency(ms) { return formatSeconds(ms); }
+        function formatSeconds(ms) { return (Number(ms || 0) / 1000).toFixed(2); }
+        function msToSeconds(ms) { return Number((Number(ms || 0) / 1000).toFixed(2)); }
+        function secondsToMs(seconds) { return Math.round(Number(seconds || 0) * 1000); }
         function numberValue(id) { return Number($(id).value); }
         function numberFromInput(value, fallback) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
+        function normalizeId(value) { return String(value || '').trim().toUpperCase(); }
+        function firstOptionId(options, fallback) { return options?.[0]?.id || fallback; }
+        function optionIndex(value, options) {
+            const index = (options || []).findIndex((option) => normalizeId(option.id) === normalizeId(value));
+            return index >= 0 ? index : 9999;
+        }
         function escapeHtml(value) {
             return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
         }

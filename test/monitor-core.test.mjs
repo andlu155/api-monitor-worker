@@ -27,6 +27,8 @@ test('builds a usable default config from environment values', () => {
   assert.equal(config.maxModelsToPing, 20);
   assert.equal(config.thresholds.warnLatencyMs, 3000);
   assert.equal(config.thresholds.errorLatencyMs, 10000);
+  assert.ok(config.providers.some((provider) => provider.id === 'OPENAI' && provider.label === 'OpenAI'));
+  assert.ok(config.channels.some((channel) => channel.id === 'DEFAULT' && channel.label === '默认渠道'));
 });
 
 test('sanitizeConfig masks sensitive values without exposing the real API key', () => {
@@ -39,6 +41,53 @@ test('sanitizeConfig masks sensitive values without exposing the real API key', 
 
   assert.equal(sanitized.apiKey, undefined);
   assert.equal(sanitized.apiKeyMasked, 'sk-1***********cdef');
+  assert.ok(Array.isArray(sanitized.providers));
+  assert.ok(Array.isArray(sanitized.channels));
+});
+
+test('mergeConfigUpdate preserves custom provider and channel options', () => {
+  const current = buildDefaultConfig({
+    TARGET_API_URL: 'https://example.test/v1',
+    API_KEY: 'sk-test',
+  });
+
+  const merged = mergeConfigUpdate(current, {
+    providers: [
+      { id: 'OPENAI', label: 'OpenAI' },
+      { id: 'LOCAL', label: '本地供应商' },
+    ],
+    channels: [
+      { id: 'DEFAULT', label: '默认渠道' },
+      { id: 'BACKUP', label: '备用渠道' },
+    ],
+    models: [
+      { name: 'local-model', provider: 'LOCAL', channel: 'BACKUP', enabled: true, sortOrder: 10 },
+    ],
+  });
+
+  assert.deepEqual(merged.providers, [
+    { id: 'OPENAI', label: 'OpenAI' },
+    { id: 'LOCAL', label: '本地供应商' },
+  ]);
+  assert.deepEqual(merged.channels, [
+    { id: 'DEFAULT', label: '默认渠道' },
+    { id: 'BACKUP', label: '备用渠道' },
+  ]);
+  assert.equal(labelProvider('LOCAL', merged.providers), '本地供应商');
+  assert.equal(labelChannel('BACKUP', merged.channels), '备用渠道');
+});
+
+test('legacy model providers and channels are added to option lists', () => {
+  const merged = mergeConfigUpdate(buildDefaultConfig(), {
+    providers: [],
+    channels: [],
+    models: [
+      { name: 'custom-model', provider: 'CUSTOMAI', channel: 'EDGE', enabled: true, sortOrder: 10 },
+    ],
+  });
+
+  assert.deepEqual(merged.providers, [{ id: 'CUSTOMAI', label: 'CUSTOMAI' }]);
+  assert.deepEqual(merged.channels, [{ id: 'EDGE', label: 'EDGE' }]);
 });
 
 test('mergeConfigUpdate preserves existing API key when submitted value is empty', () => {
@@ -164,5 +213,28 @@ test('sorts configured models by provider order then model order', () => {
     'b-1',
     'a-1',
     'd-1',
+  ]);
+});
+
+test('sorts multi-channel model entries by model order then channel order', () => {
+  const config = mergeConfigUpdate(buildDefaultConfig(), {
+    channels: [
+      { id: 'VIP', label: '高级渠道' },
+      { id: 'DEFAULT', label: '默认渠道' },
+      { id: 'BACKUP', label: '备用渠道' },
+    ],
+    models: [
+      { name: 'later', provider: 'OPENAI', channel: 'DEFAULT', sortOrder: 20 },
+      { name: 'first', provider: 'OPENAI', channel: 'BACKUP', sortOrder: 10 },
+      { name: 'first', provider: 'OPENAI', channel: 'VIP', sortOrder: 10 },
+      { name: 'first', provider: 'OPENAI', channel: 'DEFAULT', sortOrder: 10 },
+    ],
+  });
+
+  assert.deepEqual(config.models.map((model) => `${model.name}:${model.channel}`), [
+    'first:VIP',
+    'first:DEFAULT',
+    'first:BACKUP',
+    'later:DEFAULT',
   ]);
 });

@@ -12,6 +12,25 @@ export const DEFAULT_PROVIDER_ORDER = {
   OTHER: 999,
 };
 
+export const DEFAULT_PROVIDERS = [
+  { id: 'OPENAI', label: 'OpenAI' },
+  { id: 'GOOGLE', label: 'Google' },
+  { id: 'DEEPSEEK', label: 'DeepSeek' },
+  { id: 'MINIMAXAI', label: 'MiniMax' },
+  { id: 'ANTHROPIC', label: 'Anthropic' },
+  { id: 'MIDJOURNEY', label: 'Midjourney' },
+  { id: 'OTHER', label: '其他' },
+];
+
+export const DEFAULT_CHANNELS = [
+  { id: 'DEFAULT', label: '默认渠道' },
+  { id: 'PLUS', label: '增强渠道' },
+  { id: 'VIP', label: '高级渠道' },
+  { id: 'CLAUDE', label: 'Claude 渠道' },
+  { id: 'GEMINI', label: 'Gemini 渠道' },
+  { id: 'FAST', label: '快速渠道' },
+];
+
 export const DEFAULT_MODELS = [
   { name: 'gpt-3.5-turbo', provider: 'OPENAI', channel: 'DEFAULT', enabled: true, sortOrder: 10 },
   { name: 'gpt-4', provider: 'OPENAI', channel: 'DEFAULT', enabled: true, sortOrder: 20 },
@@ -38,6 +57,8 @@ export function buildDefaultConfig(env = {}) {
       warnLatencyMs: toInt(env.WARN_LATENCY_MS, 3000, 1, 60000),
       errorLatencyMs: toInt(env.ERROR_LATENCY_MS, 10000, 1, 120000),
     },
+    providers: DEFAULT_PROVIDERS,
+    channels: DEFAULT_CHANNELS,
     models: DEFAULT_MODELS,
   });
 }
@@ -55,6 +76,8 @@ export function mergeConfigUpdate(currentConfig, update = {}) {
       ...current.thresholds,
       ...(isPlainObject(update.thresholds) ? update.thresholds : {}),
     },
+    providers: Array.isArray(update.providers) ? update.providers : current.providers,
+    channels: Array.isArray(update.channels) ? update.channels : current.channels,
     models: Array.isArray(update.models) ? update.models : current.models,
   };
 
@@ -81,6 +104,15 @@ export function normalizeConfig(config = {}) {
     warnLatencyMs,
     toInt(config.thresholds?.errorLatencyMs, 10000, 1, 120000),
   );
+  const models = normalizeModels(config.models);
+  const providers = mergeOptions(
+    Array.isArray(config.providers) ? config.providers : DEFAULT_PROVIDERS,
+    models.map((model) => ({ id: model.provider, label: labelProvider(model.provider) })),
+  );
+  const channels = mergeOptions(
+    Array.isArray(config.channels) ? config.channels : DEFAULT_CHANNELS,
+    models.map((model) => ({ id: model.channel, label: labelChannel(model.channel) })),
+  );
 
   return {
     targetApiUrl: typeof config.targetApiUrl === 'string' ? config.targetApiUrl.trim() : '',
@@ -93,7 +125,9 @@ export function normalizeConfig(config = {}) {
       warnLatencyMs,
       errorLatencyMs,
     },
-    models: sortConfiguredModels(normalizeModels(config.models)),
+    providers,
+    channels,
+    models: sortConfiguredModels(models, { providers, channels }),
   };
 }
 
@@ -158,32 +192,20 @@ export async function discoverModels({ config, fetchImpl = fetch } = {}) {
   }
 }
 
-export function labelProvider(provider) {
-  const labels = {
-    OPENAI: 'OpenAI',
-    ANTHROPIC: 'Anthropic',
-    GOOGLE: 'Google',
-    DEEPSEEK: 'DeepSeek',
-    MINIMAXAI: 'MiniMax',
-    MIDJOURNEY: 'Midjourney',
-    OTHER: '其他',
-  };
-  return labels[normalizeProvider(provider)] || String(provider || '其他');
+export function labelProvider(provider, providers = DEFAULT_PROVIDERS) {
+  const id = normalizeProvider(provider);
+  const option = providers.find((item) => normalizeProvider(item.id) === id);
+  return option?.label || id || '其他';
 }
 
-export function labelChannel(channel) {
-  const labels = {
-    DEFAULT: '默认渠道',
-    PLUS: '增强渠道',
-    VIP: '高级渠道',
-    CLAUDE: 'Claude 渠道',
-    GEMINI: 'Gemini 渠道',
-    FAST: '快速渠道',
-  };
-  return labels[String(channel || '').toUpperCase()] || String(channel || '默认渠道');
+export function labelChannel(channel, channels = DEFAULT_CHANNELS) {
+  const id = normalizeOptionId(channel || 'DEFAULT');
+  const option = channels.find((item) => normalizeOptionId(item.id) === id);
+  return option?.label || id || '默认渠道';
 }
 
-export function sortConfiguredModels(models = []) {
+export function sortConfiguredModels(models = [], options = {}) {
+  const channelOrder = buildOptionOrder(options.channels || DEFAULT_CHANNELS);
   return [...models].sort((left, right) => {
     const providerDelta = providerSortOrder(left.provider) - providerSortOrder(right.provider);
     if (providerDelta !== 0) return providerDelta;
@@ -191,7 +213,10 @@ export function sortConfiguredModels(models = []) {
     const modelDelta = numericSort(left.sortOrder, 9999) - numericSort(right.sortOrder, 9999);
     if (modelDelta !== 0) return modelDelta;
 
-    return String(left.name || '').localeCompare(String(right.name || ''));
+    const nameDelta = String(left.name || '').localeCompare(String(right.name || ''));
+    if (nameDelta !== 0) return nameDelta;
+
+    return optionSortOrder(left.channel, channelOrder) - optionSortOrder(right.channel, channelOrder);
   });
 }
 
@@ -341,12 +366,50 @@ function normalizeModels(models) {
       name: typeof model.name === 'string' ? model.name.trim() : '',
       provider: normalizeProvider(model.provider || inferProvider(model.name || '')),
       channel: typeof model.channel === 'string' && model.channel.trim()
-        ? model.channel.trim()
+        ? normalizeOptionId(model.channel)
         : 'DEFAULT',
       enabled: model.enabled !== false,
       sortOrder: numericSort(model.sortOrder, 9999),
     }))
     .filter((model) => model.name);
+}
+
+function mergeOptions(primary, discovered) {
+  const map = new Map();
+  [...primary, ...discovered].forEach((option) => {
+    const normalized = normalizeOption(option);
+    if (normalized && !map.has(normalized.id)) map.set(normalized.id, normalized);
+  });
+  return Array.from(map.values());
+}
+
+function normalizeOption(option) {
+  if (typeof option === 'string') {
+    const id = normalizeOptionId(option);
+    return id ? { id, label: id } : null;
+  }
+
+  if (!isPlainObject(option)) return null;
+  const id = normalizeOptionId(option.id || option.value || option.label);
+  if (!id) return null;
+  const label = typeof option.label === 'string' && option.label.trim()
+    ? option.label.trim()
+    : id;
+  return { id, label };
+}
+
+function buildOptionOrder(options) {
+  const order = new Map();
+  options.forEach((option, index) => {
+    const id = normalizeOptionId(option.id);
+    if (id && !order.has(id)) order.set(id, index);
+  });
+  return order;
+}
+
+function optionSortOrder(value, order) {
+  const id = normalizeOptionId(value);
+  return order.has(id) ? order.get(id) : 9999;
 }
 
 function providerSortOrder(provider) {
@@ -355,6 +418,10 @@ function providerSortOrder(provider) {
 
 function normalizeProvider(provider) {
   return String(provider || 'OTHER').trim().toUpperCase() || 'OTHER';
+}
+
+function normalizeOptionId(value) {
+  return String(value || '').trim().toUpperCase();
 }
 
 function numericSort(value, fallback) {
