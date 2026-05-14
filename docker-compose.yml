@@ -1,0 +1,17 @@
+﻿version: '3.8'
+
+services:
+  api-monitor:
+    image: node:18-alpine
+    container_name: api-monitor
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      # 外部端口:容器内部端口
+      - "3060:3000"
+    env_file:
+      - .env
+    command: >
+      sh -c "npm install && node server.js"
+    restart: unless-stopped

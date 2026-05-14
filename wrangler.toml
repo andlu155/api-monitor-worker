@@ -1,0 +1,21 @@
+﻿name = "api-monitor"
+main = "src/index.js"
+compatibility_date = "2024-03-20"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallback = true
+
+[triggers]
+crons = ["* * * * *"] # Run every minute
+
+[[kv_namespaces]]
+binding = "MONITOR_KV"
+id = "mock-id-will-be-replaced-by-user" # Use your actual KV ID here
+
+[vars]
+# 可以在这里填入公开的变量，或者保持空，在 Cloudflare Dashboard 中配置
+TARGET_API_URL = ""
+# 敏感值请使用 wrangler secret put API_KEY / ADMIN_PASSWORD 设置
+

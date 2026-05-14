@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Monitor Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0b0c10;
+            color: #c5c6c7;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .card { background-color: #121418; border: 1px solid #1f2329; border-radius: 0.5rem; }
+        .panel { background-color: #11141a; border: 1px solid #252a33; border-radius: 0.5rem; }
+        .channel-card { background-color: #1a1d24; border-radius: 0.375rem; }
+        .field {
+            width: 100%;
+            background: #0b0c10;
+            border: 1px solid #2b313b;
+            border-radius: 0.375rem;
+            color: #f3f4f6;
+            padding: 0.55rem 0.65rem;
+            outline: none;
+        }
+        .field:focus { border-color: #22c55e; box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25); }
+        .text-neon-green { color: #39ff14; }
+        .text-neon-red { color: #ff3333; }
+        .text-neon-orange { color: #ff9900; }
+        .bg-neon-green { background-color: #39ff14; }
+        .bg-neon-red { background-color: #ff3333; }
+        .bg-neon-orange { background-color: #ff9900; }
+        .history-bar { width: 3px; height: 12px; display: inline-block; margin-right: 1px; border-radius: 1px; }
+        .provider-icon-OPENAI { color: #10a37f; }
+        .provider-icon-ANTHROPIC { color: #d97757; }
+        .provider-icon-GOOGLE { color: #4285f4; }
+        .provider-icon-MIDJOURNEY { color: #ffffff; }
+        .provider-icon-OTHER { color: #a3e635; }
+    </style>
+</head>
+<body class="p-4 text-xs">
+    <div id="app" class="max-w-[1800px] mx-auto">
+        <div class="flex flex-col gap-3 mb-4 border-b border-gray-800 pb-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-wrap items-center gap-3">
+                <span class="text-white font-bold text-base">概览</span>
+                <span class="text-gray-400" id="stats-overview">0模型 · 0渠道</span>
+                <div class="bg-gray-800 px-2 py-0.5 rounded text-[10px] font-mono max-w-full truncate">
+                    目标 <span class="text-gray-300" id="api-url">...</span>
+                </div>
+                <div class="bg-gray-800 px-2 py-0.5 rounded text-[10px] font-mono" id="config-summary">
+                    配置加载中
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 text-gray-400 text-[10px]">
+                <span>更新于 <span id="last-update">...</span></span>
+                <span>|</span>
+                <span id="poll-interval-display">1m 轮询</span>
+                <button id="check-now-btn" class="px-3 py-1.5 rounded bg-green-600 text-white font-medium hover:bg-green-500">立即检测</button>
+                <button id="config-btn" class="px-3 py-1.5 rounded bg-gray-800 text-gray-100 font-medium hover:bg-gray-700">配置</button>
+            </div>
+        </div>
+
+        <div id="notice" class="hidden mb-4 rounded border px-3 py-2"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="models-grid">
+            <div class="text-center col-span-full py-6 text-gray-500">
+                正在初始化面板... <br><span class="text-[10px] text-gray-600 mt-1 block">等待定时任务返回数据</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal" class="hidden fixed inset-0 z-50 bg-black/70 p-4 overflow-y-auto">
+        <div class="panel mx-auto my-4 max-w-5xl p-4">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3 mb-4">
+                <div>
+                    <div class="text-white text-base font-bold">配置管理</div>
+                    <div class="text-gray-500 text-[11px] mt-1">保存后会影响后续定时检测；API Key 留空表示不修改。</div>
+                </div>
+                <button id="close-modal-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700">关闭</button>
+            </div>
+
+            <div id="login-view" class="max-w-sm">
+                <label class="block text-gray-400 mb-1">管理员密码</label>
+                <input id="admin-password" class="field mb-3" type="password" autocomplete="current-password">
+                <button id="login-btn" class="w-full px-3 py-2 rounded bg-green-600 text-white font-medium hover:bg-green-500">登录</button>
+            </div>
+
+            <form id="config-form" class="hidden space-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label class="block">
+                        <span class="block text-gray-400 mb-1">目标 API URL</span>
+                        <input id="targetApiUrl" class="field" placeholder="https://example.com/v1">
+                    </label>
+                    <label class="block">
+                        <span class="block text-gray-400 mb-1">API Key <span id="api-key-mask" class="text-gray-600"></span></span>
+                        <input id="apiKey" class="field" type="password" placeholder="留空表示不修改">
+                    </label>
+                    <label class="block">
+                        <span class="block text-gray-400 mb-1">轮询间隔（分钟）</span>
+                        <input id="pollIntervalMinutes" class="field" type="number" min="1" max="1440">
+                    </label>
+                    <label class="block">
+                        <span class="block text-gray-400 mb-1">请求超时（毫秒）</span>
+                        <input id="requestTimeoutMs" class="field" type="number" min="1000" max="60000" step="500">
+                    </label>
+                    <label class="block">
+                        <span class="block text-gray-400 mb-1">最大检测模型数</span>
+                        <input id="maxModelsToPing" class="field" type="number" min="1" max="200">
+                    </label>
+                    <label class="block">
+                        <span class="block text-gray-400 mb-1">最大并发</span>
+                        <input id="maxConcurrency" class="field" type="number" min="1" max="50">
+                    </label>
+                    <label class="block">
+                        <span class="block text-gray-400 mb-1">警告阈值（毫秒）</span>
+                        <input id="warnLatencyMs" class="field" type="number" min="1" max="60000" step="100">
+                    </label>
+                    <label class="block">
+                        <span class="block text-gray-400 mb-1">异常阈值（毫秒）</span>
+                        <input id="errorLatencyMs" class="field" type="number" min="1" max="120000" step="100">
+                    </label>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-white font-bold">模型配置</div>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" id="discover-models-btn" class="px-2 py-1 rounded bg-green-700 text-white hover:bg-green-600">自动获取模型</button>
+                            <button type="button" id="add-model-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">添加模型</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto border border-gray-800 rounded">
+                        <table class="w-full min-w-[760px] text-left">
+                            <thead class="bg-gray-900 text-gray-500 uppercase text-[10px]">
+                                <tr>
+                                    <th class="p-2 w-16">启用</th>
+                                    <th class="p-2">模型</th>
+                                    <th class="p-2 w-40">供应商</th>
+                                    <th class="p-2 w-40">渠道</th>
+                                    <th class="p-2 w-20">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="models-config-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="submit" class="px-4 py-2 rounded bg-green-600 text-white font-medium hover:bg-green-500">保存配置</button>
+                    <button type="button" id="modal-check-now-btn" class="px-4 py-2 rounded bg-gray-800 text-gray-100 font-medium hover:bg-gray-700">保存后立即检测</button>
+                    <span id="config-message" class="text-gray-500"></span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            token: localStorage.getItem('adminToken') || '',
+            config: null,
+            fetchInterval: null,
+        };
+
+        const $ = (id) => document.getElementById(id);
+
+        $('config-btn').addEventListener('click', openConfig);
+        $('close-modal-btn').addEventListener('click', () => $('modal').classList.add('hidden'));
+        $('login-btn').addEventListener('click', login);
+        $('add-model-btn').addEventListener('click', () => {
+            state.config.models.push({ name: '', provider: 'OTHER', channel: 'DEFAULT', enabled: true });
+            renderConfigModels();
+        });
+        $('discover-models-btn').addEventListener('click', discoverModels);
+        $('config-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await saveConfig(false);
+        });
+        $('check-now-btn').addEventListener('click', checkNow);
+        $('modal-check-now-btn').addEventListener('click', async () => {
+            await saveConfig(true);
+        });
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                if (data.url) $('api-url').textContent = data.url;
+                if (data.interval) {
+                    $('poll-interval-display').textContent = `${data.interval}m 轮询`;
+                    resetFetchInterval(data.interval);
+                }
+                renderSummary(data.configSummary);
+                if (data.error) showNotice(data.error, 'warn');
+                renderData(data.models || []);
+            } catch (error) {
+                showNotice(`状态加载失败：${error.message}`, 'error');
+            }
+        }
+
+        function resetFetchInterval(minutes) {
+            clearInterval(state.fetchInterval);
+            state.fetchInterval = setInterval(fetchData, Math.max(minutes * 60000, 10000));
+        }
+
+        function renderSummary(summary) {
+            if (!summary) return;
+            $('config-summary').textContent = `${summary.enabledModels}/${summary.configuredModels} 启用 · 超时 ${summary.requestTimeoutMs}ms · 阈值 ${summary.thresholds.warnLatencyMs}/${summary.thresholds.errorLatencyMs}ms`;
+        }
+
+        async function openConfig() {
+            $('modal').classList.remove('hidden');
+            if (state.token) {
+                await loadConfig();
+            } else {
+                showLogin();
+            }
+        }
+
+        async function login() {
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: $('admin-password').value }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '登录失败');
+                state.token = data.token;
+                localStorage.setItem('adminToken', state.token);
+                $('admin-password').value = '';
+                await loadConfig();
+            } catch (error) {
+                setConfigMessage(error.message, true);
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config', { headers: authHeaders() });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '配置加载失败');
+                state.config = data.config;
+                fillConfigForm();
+                showConfigForm();
+            } catch (error) {
+                state.token = '';
+                localStorage.removeItem('adminToken');
+                showLogin();
+                setConfigMessage(error.message, true);
+            }
+        }
+
+        async function saveConfig(runAfterSave) {
+            try {
+                const payload = collectConfigForm();
+                const response = await fetch('/api/config', {
+                    method: 'PUT',
+                    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '保存失败');
+                state.config = data.config;
+                fillConfigForm();
+                setConfigMessage('配置已保存', false);
+                if (runAfterSave) await checkNow();
+                await fetchData();
+            } catch (error) {
+                setConfigMessage(error.message, true);
+            }
+        }
+
+        async function checkNow() {
+            if (!state.token) {
+                openConfig();
+                return;
+            }
+
+            try {
+                showNotice('正在执行检测...', 'info');
+                const response = await fetch('/api/check-now', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '检测失败');
+                showNotice(`检测完成：${data.count} 个模型`, 'success');
+                await fetchData();
+            } catch (error) {
+                showNotice(error.message, 'error');
+            }
+        }
+
+        async function discoverModels() {
+            try {
+                setConfigMessage('正在从 /models 获取模型...', false);
+                const response = await fetch('/api/models/discover', {
+                    method: 'POST',
+                    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        targetApiUrl: $('targetApiUrl').value,
+                        apiKey: $('apiKey').value,
+                        requestTimeoutMs: numberValue('requestTimeoutMs'),
+                        maxModelsToPing: numberValue('maxModelsToPing'),
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '获取模型失败');
+                state.config.models = mergeDiscoveredModels(state.config.models || [], data.models || []);
+                renderConfigModels();
+                setConfigMessage(`已获取 ${data.models.length} 个模型，请保存配置`, false);
+            } catch (error) {
+                setConfigMessage(error.message, true);
+            }
+        }
+
+        function fillConfigForm() {
+            const config = state.config;
+            $('targetApiUrl').value = config.targetApiUrl || '';
+            $('apiKey').value = '';
+            $('api-key-mask').textContent = config.apiKeyMasked ? `当前 ${config.apiKeyMasked}` : '未设置';
+            $('pollIntervalMinutes').value = config.pollIntervalMinutes;
+            $('requestTimeoutMs').value = config.requestTimeoutMs;
+            $('maxModelsToPing').value = config.maxModelsToPing;
+            $('maxConcurrency').value = config.maxConcurrency;
+            $('warnLatencyMs').value = config.thresholds.warnLatencyMs;
+            $('errorLatencyMs').value = config.thresholds.errorLatencyMs;
+            renderConfigModels();
+        }
+
+        function collectConfigForm() {
+            return {
+                targetApiUrl: $('targetApiUrl').value,
+                apiKey: $('apiKey').value,
+                pollIntervalMinutes: numberValue('pollIntervalMinutes'),
+                requestTimeoutMs: numberValue('requestTimeoutMs'),
+                maxModelsToPing: numberValue('maxModelsToPing'),
+                maxConcurrency: numberValue('maxConcurrency'),
+                thresholds: {
+                    warnLatencyMs: numberValue('warnLatencyMs'),
+                    errorLatencyMs: numberValue('errorLatencyMs'),
+                },
+                models: Array.from(document.querySelectorAll('[data-model-row]')).map((row) => ({
+                    enabled: row.querySelector('[data-field="enabled"]').checked,
+                    name: row.querySelector('[data-field="name"]').value,
+                    provider: row.querySelector('[data-field="provider"]').value,
+                    channel: row.querySelector('[data-field="channel"]').value,
+                })).filter((model) => model.name.trim()),
+            };
+        }
+
+        function renderConfigModels() {
+            const body = $('models-config-body');
+            body.innerHTML = '';
+            (state.config.models || []).forEach((model, index) => {
+                const row = document.createElement('tr');
+                row.className = 'border-t border-gray-800';
+                row.dataset.modelRow = 'true';
+                row.innerHTML = `
+                    <td class="p-2"><input data-field="enabled" type="checkbox" ${model.enabled ? 'checked' : ''}></td>
+                    <td class="p-2"><input data-field="name" class="field" value="${escapeHtml(model.name)}"></td>
+                    <td class="p-2">
+                        <select data-field="provider" class="field">
+                            ${providerOptions(model.provider)}
+                        </select>
+                    </td>
+                    <td class="p-2">
+                        <input data-field="channel" class="field" value="${escapeHtml(model.channel)}">
+                        <div class="text-[10px] text-gray-500 mt-1">${escapeHtml(labelChannel(model.channel))}</div>
+                    </td>
+                    <td class="p-2"><button type="button" class="px-2 py-1 rounded bg-red-900/40 text-red-300">删除</button></td>
+                `;
+                row.querySelector('button').addEventListener('click', () => {
+                    state.config.models.splice(index, 1);
+                    renderConfigModels();
+                });
+                body.appendChild(row);
+            });
+        }
+
+        function renderData(models) {
+            $('last-update').textContent = new Date().toLocaleTimeString();
+
+            let modelCount = models.length;
+            let channelCount = 0;
+            const grid = $('models-grid');
+            grid.innerHTML = '';
+
+            if (!models || models.length === 0) {
+                grid.innerHTML = '<div class="text-center col-span-full py-6 text-gray-500">暂无检测数据</div>';
+                $('stats-overview').textContent = '0模型 · 0渠道';
+                return;
+            }
+
+            models.forEach(model => {
+                let channelsHtml = '';
+                let historyHtml = '<div class="mt-2"><div class="text-[9px] text-gray-500 mb-1 font-mono tracking-wider">HISTORY</div>';
+
+                model.channels.forEach(channel => {
+                    channelCount++;
+                    const isError = channel.status === 'error';
+                    const isWarn = channel.status === 'warn';
+                    const statusColor = isError ? 'text-neon-red' : (isWarn ? 'text-neon-orange' : 'text-neon-green');
+                    const statusBg = isError ? 'bg-red-900/30 text-neon-red' : (isWarn ? 'bg-orange-900/30 text-neon-orange' : 'bg-green-900/30 text-neon-green');
+                    const statusText = isError ? '异常' : (isWarn ? '延迟' : '正常');
+                    const latencySec = formatLatency(channel.latency);
+                    const errorHtml = channel.error ? `<div class="mt-1 text-[10px] text-red-300 truncate" title="${escapeHtml(channel.error)}">${escapeHtml(channel.error)}</div>` : '';
+
+                    channelsHtml += `
+                        <div class="mb-3">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="font-bold text-gray-300 tracking-wider text-xs">${escapeHtml(channel.name)}</span>
+                                <span class="px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${statusBg}">● ${statusText}</span>
+                            </div>
+                            <div class="channel-card p-2">
+                                <div class="flex justify-between items-end mb-1">
+                                    <div>
+                                        <div class="text-gray-500 text-[10px] mb-0.5 font-mono">对话延迟</div>
+                                        <div class="text-base font-bold font-mono tracking-tighter ${statusColor}">${latencySec} s</div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between text-[10px] text-gray-500 border-t border-gray-700/50 pt-1.5 mt-1.5 font-mono">
+                                    <div>可用 <span class="${statusColor} ml-0.5 font-bold">${channel.availability}%</span></div>
+                                    <div>PING <span class="${statusColor} ml-0.5 font-bold">${latencySec} s</span></div>
+                                </div>
+                                ${errorHtml}
+                            </div>
+                        </div>
+                    `;
+
+                    historyHtml += `<div class="flex items-center mb-0.5"><span class="w-10 text-[9px] text-gray-400 truncate pr-1 font-mono">${escapeHtml(channel.name.toLowerCase())}</span><div class="flex-1 flex gap-[1px]">`;
+                    const history = channel.history || [];
+                    for (let i = 0; i < 60 - history.length; i++) historyHtml += '<span class="history-bar bg-gray-800"></span>';
+                    history.forEach(h => {
+                        let hColor = 'bg-neon-green';
+                        if (!h.success || h.status === 'error') hColor = 'bg-neon-red';
+                        else if (h.status === 'warn') hColor = 'bg-neon-orange';
+                        historyHtml += `<span class="history-bar ${hColor}" title="${new Date(h.timestamp).toLocaleTimeString()} - ${formatLatency(h.latency)}s"></span>`;
+                    });
+                    historyHtml += '</div></div>';
+                });
+                historyHtml += '</div>';
+
+                const card = document.createElement('div');
+                card.className = 'card p-4';
+                card.innerHTML = `
+                    <div class="flex items-center gap-2.5 mb-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xl font-bold provider-icon-${model.provider || 'OTHER'}">
+                            ${getProviderInitial(model.provider)}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-[10px] text-gray-500 font-mono tracking-widest uppercase leading-none mb-0.5">${escapeHtml(labelProvider(model.provider))}</div>
+                            <div class="text-sm font-bold text-white tracking-wide leading-tight break-words">${escapeHtml(model.name)}</div>
+                        </div>
+                    </div>
+                    ${channelsHtml}
+                    ${historyHtml}
+                `;
+                grid.appendChild(card);
+            });
+
+            $('stats-overview').textContent = `${modelCount}模型 · ${channelCount}渠道`;
+        }
+
+        function showLogin() {
+            $('login-view').classList.remove('hidden');
+            $('config-form').classList.add('hidden');
+        }
+
+        function showConfigForm() {
+            $('login-view').classList.add('hidden');
+            $('config-form').classList.remove('hidden');
+            setConfigMessage('', false);
+        }
+
+        function authHeaders() {
+            return { Authorization: `Bearer ${state.token}` };
+        }
+
+        function setConfigMessage(message, isError) {
+            $('config-message').textContent = message || '';
+            $('config-message').className = isError ? 'text-red-300' : 'text-green-300';
+        }
+
+        function showNotice(message, type) {
+            const el = $('notice');
+            el.textContent = message;
+            el.className = 'mb-4 rounded border px-3 py-2';
+            if (type === 'error') el.classList.add('border-red-900', 'bg-red-950/40', 'text-red-200');
+            else if (type === 'success') el.classList.add('border-green-900', 'bg-green-950/40', 'text-green-200');
+            else el.classList.add('border-orange-900', 'bg-orange-950/40', 'text-orange-200');
+            el.classList.remove('hidden');
+        }
+
+        function getProviderInitial(provider) {
+            if (!provider) return '?';
+            if (provider === 'OPENAI') return 'O';
+            if (provider === 'ANTHROPIC') return 'A';
+            if (provider === 'GOOGLE') return 'G';
+            if (provider === 'MIDJOURNEY') return 'M';
+            return provider.charAt(0).toUpperCase();
+        }
+
+        function mergeDiscoveredModels(existing, discovered) {
+            const map = new Map();
+            existing.forEach((model) => {
+                map.set(`${model.name}_${model.channel}`, model);
+            });
+            discovered.forEach((model) => {
+                const key = `${model.name}_${model.channel}`;
+                if (!map.has(key)) map.set(key, model);
+            });
+            return Array.from(map.values());
+        }
+
+        function providerOptions(current) {
+            const providers = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'MIDJOURNEY', 'OTHER'];
+            return providers.map((provider) => (
+                `<option value="${provider}" ${provider === current ? 'selected' : ''}>${labelProvider(provider)}</option>`
+            )).join('');
+        }
+
+        function labelProvider(provider) {
+            const labels = {
+                OPENAI: 'OpenAI',
+                ANTHROPIC: 'Anthropic',
+                GOOGLE: 'Google',
+                MIDJOURNEY: 'Midjourney',
+                OTHER: '其他',
+            };
+            return labels[String(provider || '').toUpperCase()] || provider || '其他';
+        }
+
+        function labelChannel(channel) {
+            const labels = {
+                DEFAULT: '默认渠道',
+                PLUS: '增强渠道',
+                VIP: '高级渠道',
+                CLAUDE: 'Claude 渠道',
+                GEMINI: 'Gemini 渠道',
+                FAST: '快速渠道',
+            };
+            return labels[String(channel || '').toUpperCase()] || channel || '默认渠道';
+        }
+
+        function formatLatency(ms) {
+            return (Number(ms || 0) / 1000).toFixed(2);
+        }
+
+        function numberValue(id) {
+            return Number($(id).value);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;',
+            }[char]));
+        }
+
+        fetchData();
+        resetFetchInterval(1);
+    </script>
+</body>
+</html>

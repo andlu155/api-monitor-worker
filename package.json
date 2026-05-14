@@ -1,0 +1,21 @@
+﻿{
+  "name": "api-monitor",
+  "version": "1.0.0",
+  "description": "API Monitor Dashboard for Cloudflare Workers / Node / Docker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-cron": "^3.0.2",
+    "node-fetch": "^3.3.1"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
