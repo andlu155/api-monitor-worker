@@ -6,23 +6,11 @@
     <title>API Monitor Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            background-color: #0b0c10;
-            color: #c5c6c7;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
+        body { background-color: #0b0c10; color: #c5c6c7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .card { background-color: #121418; border: 1px solid #1f2329; border-radius: 0.5rem; }
         .panel { background-color: #11141a; border: 1px solid #252a33; border-radius: 0.5rem; }
         .channel-card { background-color: #1a1d24; border-radius: 0.375rem; }
-        .field {
-            width: 100%;
-            background: #0b0c10;
-            border: 1px solid #2b313b;
-            border-radius: 0.375rem;
-            color: #f3f4f6;
-            padding: 0.55rem 0.65rem;
-            outline: none;
-        }
+        .field { width: 100%; background: #0b0c10; border: 1px solid #2b313b; border-radius: 0.375rem; color: #f3f4f6; padding: 0.55rem 0.65rem; outline: none; }
         .field:focus { border-color: #22c55e; box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25); }
         .text-neon-green { color: #39ff14; }
         .text-neon-red { color: #ff3333; }
@@ -31,11 +19,6 @@
         .bg-neon-red { background-color: #ff3333; }
         .bg-neon-orange { background-color: #ff9900; }
         .history-bar { width: 3px; height: 12px; display: inline-block; margin-right: 1px; border-radius: 1px; }
-        .provider-icon-OPENAI { color: #10a37f; }
-        .provider-icon-ANTHROPIC { color: #d97757; }
-        .provider-icon-GOOGLE { color: #4285f4; }
-        .provider-icon-MIDJOURNEY { color: #ffffff; }
-        .provider-icon-OTHER { color: #a3e635; }
     </style>
 </head>
 <body class="p-4 text-xs">
@@ -47,9 +30,7 @@
                 <div class="bg-gray-800 px-2 py-0.5 rounded text-[10px] font-mono max-w-full truncate">
                     目标 <span class="text-gray-300" id="api-url">...</span>
                 </div>
-                <div class="bg-gray-800 px-2 py-0.5 rounded text-[10px] font-mono" id="config-summary">
-                    配置加载中
-                </div>
+                <div class="bg-gray-800 px-2 py-0.5 rounded text-[10px] font-mono" id="config-summary">配置加载中</div>
             </div>
             <div class="flex flex-wrap items-center gap-2 text-gray-400 text-[10px]">
                 <span>更新于 <span id="last-update">...</span></span>
@@ -61,20 +42,17 @@
         </div>
 
         <div id="notice" class="hidden mb-4 rounded border px-3 py-2"></div>
-
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="models-grid">
-            <div class="text-center col-span-full py-6 text-gray-500">
-                正在初始化面板... <br><span class="text-[10px] text-gray-600 mt-1 block">等待定时任务返回数据</span>
-            </div>
+            <div class="text-center col-span-full py-6 text-gray-500">正在初始化面板...</div>
         </div>
     </div>
 
     <div id="modal" class="hidden fixed inset-0 z-50 bg-black/70 p-4 overflow-y-auto">
-        <div class="panel mx-auto my-4 max-w-5xl p-4">
+        <div class="panel mx-auto my-4 max-w-6xl p-4">
             <div class="flex items-center justify-between border-b border-gray-800 pb-3 mb-4">
                 <div>
                     <div class="text-white text-base font-bold">配置管理</div>
-                    <div class="text-gray-500 text-[11px] mt-1">保存后会影响后续定时检测；API Key 留空表示不修改。</div>
+                    <div class="text-gray-500 text-[11px] mt-1">API Key 留空表示不修改；供应商可直接输入自定义分组。</div>
                 </div>
                 <button id="close-modal-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700">关闭</button>
             </div>
@@ -87,56 +65,36 @@
 
             <form id="config-form" class="hidden space-y-5">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label class="block">
-                        <span class="block text-gray-400 mb-1">目标 API URL</span>
-                        <input id="targetApiUrl" class="field" placeholder="https://example.com/v1">
-                    </label>
-                    <label class="block">
-                        <span class="block text-gray-400 mb-1">API Key <span id="api-key-mask" class="text-gray-600"></span></span>
-                        <input id="apiKey" class="field" type="password" placeholder="留空表示不修改">
-                    </label>
-                    <label class="block">
-                        <span class="block text-gray-400 mb-1">轮询间隔（分钟）</span>
-                        <input id="pollIntervalMinutes" class="field" type="number" min="1" max="1440">
-                    </label>
-                    <label class="block">
-                        <span class="block text-gray-400 mb-1">请求超时（毫秒）</span>
-                        <input id="requestTimeoutMs" class="field" type="number" min="1000" max="60000" step="500">
-                    </label>
-                    <label class="block">
-                        <span class="block text-gray-400 mb-1">最大检测模型数</span>
-                        <input id="maxModelsToPing" class="field" type="number" min="1" max="200">
-                    </label>
-                    <label class="block">
-                        <span class="block text-gray-400 mb-1">最大并发</span>
-                        <input id="maxConcurrency" class="field" type="number" min="1" max="50">
-                    </label>
-                    <label class="block">
-                        <span class="block text-gray-400 mb-1">警告阈值（毫秒）</span>
-                        <input id="warnLatencyMs" class="field" type="number" min="1" max="60000" step="100">
-                    </label>
-                    <label class="block">
-                        <span class="block text-gray-400 mb-1">异常阈值（毫秒）</span>
-                        <input id="errorLatencyMs" class="field" type="number" min="1" max="120000" step="100">
-                    </label>
+                    <label class="block"><span class="block text-gray-400 mb-1">目标 API URL</span><input id="targetApiUrl" class="field" placeholder="https://example.com/v1"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">API Key <span id="api-key-mask" class="text-gray-600"></span></span><input id="apiKey" class="field" type="password" placeholder="留空表示不修改"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">轮询间隔（分钟）</span><input id="pollIntervalMinutes" class="field" type="number" min="1" max="1440"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">请求超时（毫秒）</span><input id="requestTimeoutMs" class="field" type="number" min="1000" max="60000" step="500"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">最大检测模型数</span><input id="maxModelsToPing" class="field" type="number" min="1" max="200"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">最大并发</span><input id="maxConcurrency" class="field" type="number" min="1" max="50"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">警告阈值（毫秒）</span><input id="warnLatencyMs" class="field" type="number" min="1" max="60000" step="100"></label>
+                    <label class="block"><span class="block text-gray-400 mb-1">异常阈值（毫秒）</span><input id="errorLatencyMs" class="field" type="number" min="1" max="120000" step="100"></label>
                 </div>
 
                 <div>
                     <div class="flex items-center justify-between mb-2">
-                        <div class="text-white font-bold">模型配置</div>
+                        <div>
+                            <div class="text-white font-bold">模型配置</div>
+                            <div class="text-[10px] text-gray-500 mt-1">供应商排序：OpenAI、Google、DeepSeek、MiniMax、Anthropic、Midjourney、其他/自定义。模型排序数值越小越靠前。</div>
+                        </div>
                         <div class="flex flex-wrap gap-2">
                             <button type="button" id="discover-models-btn" class="px-2 py-1 rounded bg-green-700 text-white hover:bg-green-600">自动获取模型</button>
                             <button type="button" id="add-model-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">添加模型</button>
                         </div>
                     </div>
                     <div class="overflow-x-auto border border-gray-800 rounded">
-                        <table class="w-full min-w-[760px] text-left">
+                        <table class="w-full min-w-[900px] text-left">
                             <thead class="bg-gray-900 text-gray-500 uppercase text-[10px]">
                                 <tr>
                                     <th class="p-2 w-16">启用</th>
                                     <th class="p-2">模型</th>
-                                    <th class="p-2 w-40">供应商</th>
+                                    <th class="p-2 w-44">供应商</th>
                                     <th class="p-2 w-40">渠道</th>
+                                    <th class="p-2 w-28">模型排序</th>
                                     <th class="p-2 w-20">操作</th>
                                 </tr>
                             </thead>
@@ -154,31 +112,31 @@
         </div>
     </div>
 
-    <script>
-        const state = {
-            token: localStorage.getItem('adminToken') || '',
-            config: null,
-            fetchInterval: null,
-        };
+    <datalist id="provider-options">
+        <option value="OPENAI"></option>
+        <option value="GOOGLE"></option>
+        <option value="DEEPSEEK"></option>
+        <option value="MINIMAXAI"></option>
+        <option value="ANTHROPIC"></option>
+        <option value="MIDJOURNEY"></option>
+        <option value="OTHER"></option>
+    </datalist>
 
+    <script>
+        const state = { token: localStorage.getItem('adminToken') || '', config: null, fetchInterval: null };
         const $ = (id) => document.getElementById(id);
 
         $('config-btn').addEventListener('click', openConfig);
         $('close-modal-btn').addEventListener('click', () => $('modal').classList.add('hidden'));
         $('login-btn').addEventListener('click', login);
+        $('discover-models-btn').addEventListener('click', discoverModels);
         $('add-model-btn').addEventListener('click', () => {
-            state.config.models.push({ name: '', provider: 'OTHER', channel: 'DEFAULT', enabled: true });
+            state.config.models.push({ name: '', provider: 'OTHER', channel: 'DEFAULT', enabled: true, sortOrder: nextSortOrder() });
             renderConfigModels();
         });
-        $('discover-models-btn').addEventListener('click', discoverModels);
-        $('config-form').addEventListener('submit', async (event) => {
-            event.preventDefault();
-            await saveConfig(false);
-        });
+        $('config-form').addEventListener('submit', async (event) => { event.preventDefault(); await saveConfig(false); });
         $('check-now-btn').addEventListener('click', checkNow);
-        $('modal-check-now-btn').addEventListener('click', async () => {
-            await saveConfig(true);
-        });
+        $('modal-check-now-btn').addEventListener('click', async () => { await saveConfig(true); });
 
         async function fetchData() {
             try {
@@ -209,11 +167,8 @@
 
         async function openConfig() {
             $('modal').classList.remove('hidden');
-            if (state.token) {
-                await loadConfig();
-            } else {
-                showLogin();
-            }
+            if (state.token) await loadConfig();
+            else showLogin();
         }
 
         async function login() {
@@ -271,17 +226,10 @@
         }
 
         async function checkNow() {
-            if (!state.token) {
-                openConfig();
-                return;
-            }
-
+            if (!state.token) { openConfig(); return; }
             try {
                 showNotice('正在执行检测...', 'info');
-                const response = await fetch('/api/check-now', {
-                    method: 'POST',
-                    headers: authHeaders(),
-                });
+                const response = await fetch('/api/check-now', { method: 'POST', headers: authHeaders() });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || '检测失败');
                 showNotice(`检测完成：${data.count} 个模型`, 'success');
@@ -306,7 +254,7 @@
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || '获取模型失败');
-                state.config.models = mergeDiscoveredModels(state.config.models || [], data.models || []);
+                state.config.models = sortModels(mergeDiscoveredModels(state.config.models || [], data.models || []));
                 renderConfigModels();
                 setConfigMessage(`已获取 ${data.models.length} 个模型，请保存配置`, false);
             } catch (error) {
@@ -336,23 +284,22 @@
                 requestTimeoutMs: numberValue('requestTimeoutMs'),
                 maxModelsToPing: numberValue('maxModelsToPing'),
                 maxConcurrency: numberValue('maxConcurrency'),
-                thresholds: {
-                    warnLatencyMs: numberValue('warnLatencyMs'),
-                    errorLatencyMs: numberValue('errorLatencyMs'),
-                },
-                models: Array.from(document.querySelectorAll('[data-model-row]')).map((row) => ({
+                thresholds: { warnLatencyMs: numberValue('warnLatencyMs'), errorLatencyMs: numberValue('errorLatencyMs') },
+                models: sortModels(Array.from(document.querySelectorAll('[data-model-row]')).map((row) => ({
                     enabled: row.querySelector('[data-field="enabled"]').checked,
                     name: row.querySelector('[data-field="name"]').value,
                     provider: row.querySelector('[data-field="provider"]').value,
                     channel: row.querySelector('[data-field="channel"]').value,
-                })).filter((model) => model.name.trim()),
+                    sortOrder: numberFromInput(row.querySelector('[data-field="sortOrder"]').value, 9999),
+                })).filter((model) => model.name.trim())),
             };
         }
 
         function renderConfigModels() {
             const body = $('models-config-body');
             body.innerHTML = '';
-            (state.config.models || []).forEach((model, index) => {
+            state.config.models = sortModels(state.config.models || []);
+            state.config.models.forEach((model, index) => {
                 const row = document.createElement('tr');
                 row.className = 'border-t border-gray-800';
                 row.dataset.modelRow = 'true';
@@ -360,14 +307,14 @@
                     <td class="p-2"><input data-field="enabled" type="checkbox" ${model.enabled ? 'checked' : ''}></td>
                     <td class="p-2"><input data-field="name" class="field" value="${escapeHtml(model.name)}"></td>
                     <td class="p-2">
-                        <select data-field="provider" class="field">
-                            ${providerOptions(model.provider)}
-                        </select>
+                        <input data-field="provider" class="field" list="provider-options" value="${escapeHtml(model.provider || 'OTHER')}">
+                        <div class="text-[10px] text-gray-500 mt-1">${escapeHtml(labelProvider(model.provider))}</div>
                     </td>
                     <td class="p-2">
-                        <input data-field="channel" class="field" value="${escapeHtml(model.channel)}">
+                        <input data-field="channel" class="field" value="${escapeHtml(model.channel || 'DEFAULT')}">
                         <div class="text-[10px] text-gray-500 mt-1">${escapeHtml(labelChannel(model.channel))}</div>
                     </td>
+                    <td class="p-2"><input data-field="sortOrder" class="field" type="number" value="${Number.isFinite(Number(model.sortOrder)) ? Number(model.sortOrder) : 9999}"></td>
                     <td class="p-2"><button type="button" class="px-2 py-1 rounded bg-red-900/40 text-red-300">删除</button></td>
                 `;
                 row.querySelector('button').addEventListener('click', () => {
@@ -380,23 +327,22 @@
 
         function renderData(models) {
             $('last-update').textContent = new Date().toLocaleTimeString();
-
-            let modelCount = models.length;
+            const sortedModels = sortModels(models || []);
             let channelCount = 0;
             const grid = $('models-grid');
             grid.innerHTML = '';
 
-            if (!models || models.length === 0) {
+            if (sortedModels.length === 0) {
                 grid.innerHTML = '<div class="text-center col-span-full py-6 text-gray-500">暂无检测数据</div>';
                 $('stats-overview').textContent = '0模型 · 0渠道';
                 return;
             }
 
-            models.forEach(model => {
+            sortedModels.forEach((model) => {
                 let channelsHtml = '';
                 let historyHtml = '<div class="mt-2"><div class="text-[9px] text-gray-500 mb-1 font-mono tracking-wider">HISTORY</div>';
 
-                model.channels.forEach(channel => {
+                model.channels.forEach((channel) => {
                     channelCount++;
                     const isError = channel.status === 'error';
                     const isWarn = channel.status === 'warn';
@@ -409,16 +355,12 @@
                     channelsHtml += `
                         <div class="mb-3">
                             <div class="flex justify-between items-center mb-1.5">
-                                <span class="font-bold text-gray-300 tracking-wider text-xs">${escapeHtml(channel.name)}</span>
+                                <span class="font-bold text-gray-300 tracking-wider text-xs">${escapeHtml(labelChannel(channel.name))}</span>
                                 <span class="px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide ${statusBg}">● ${statusText}</span>
                             </div>
                             <div class="channel-card p-2">
-                                <div class="flex justify-between items-end mb-1">
-                                    <div>
-                                        <div class="text-gray-500 text-[10px] mb-0.5 font-mono">对话延迟</div>
-                                        <div class="text-base font-bold font-mono tracking-tighter ${statusColor}">${latencySec} s</div>
-                                    </div>
-                                </div>
+                                <div class="text-gray-500 text-[10px] mb-0.5 font-mono">对话延迟</div>
+                                <div class="text-base font-bold font-mono tracking-tighter ${statusColor}">${latencySec} s</div>
                                 <div class="flex justify-between text-[10px] text-gray-500 border-t border-gray-700/50 pt-1.5 mt-1.5 font-mono">
                                     <div>可用 <span class="${statusColor} ml-0.5 font-bold">${channel.availability}%</span></div>
                                     <div>PING <span class="${statusColor} ml-0.5 font-bold">${latencySec} s</span></div>
@@ -428,10 +370,10 @@
                         </div>
                     `;
 
-                    historyHtml += `<div class="flex items-center mb-0.5"><span class="w-10 text-[9px] text-gray-400 truncate pr-1 font-mono">${escapeHtml(channel.name.toLowerCase())}</span><div class="flex-1 flex gap-[1px]">`;
+                    historyHtml += `<div class="flex items-center mb-0.5"><span class="w-10 text-[9px] text-gray-400 truncate pr-1 font-mono">${escapeHtml(labelChannel(channel.name))}</span><div class="flex-1 flex gap-[1px]">`;
                     const history = channel.history || [];
                     for (let i = 0; i < 60 - history.length; i++) historyHtml += '<span class="history-bar bg-gray-800"></span>';
-                    history.forEach(h => {
+                    history.forEach((h) => {
                         let hColor = 'bg-neon-green';
                         if (!h.success || h.status === 'error') hColor = 'bg-neon-red';
                         else if (h.status === 'warn') hColor = 'bg-neon-orange';
@@ -445,9 +387,7 @@
                 card.className = 'card p-4';
                 card.innerHTML = `
                     <div class="flex items-center gap-2.5 mb-4">
-                        <div class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xl font-bold provider-icon-${model.provider || 'OTHER'}">
-                            ${getProviderInitial(model.provider)}
-                        </div>
+                        <div class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xl font-bold">${escapeHtml(getProviderInitial(model.provider))}</div>
                         <div class="min-w-0">
                             <div class="text-[10px] text-gray-500 font-mono tracking-widest uppercase leading-none mb-0.5">${escapeHtml(labelProvider(model.provider))}</div>
                             <div class="text-sm font-bold text-white tracking-wide leading-tight break-words">${escapeHtml(model.name)}</div>
@@ -459,23 +399,41 @@
                 grid.appendChild(card);
             });
 
-            $('stats-overview').textContent = `${modelCount}模型 · ${channelCount}渠道`;
+            $('stats-overview').textContent = `${sortedModels.length}模型 · ${channelCount}渠道`;
         }
 
-        function showLogin() {
-            $('login-view').classList.remove('hidden');
-            $('config-form').classList.add('hidden');
+        function mergeDiscoveredModels(existing, discovered) {
+            const map = new Map(existing.map((model) => [`${model.name}_${model.channel}`, model]));
+            discovered.forEach((model) => {
+                const key = `${model.name}_${model.channel}`;
+                if (!map.has(key)) map.set(key, model);
+            });
+            return Array.from(map.values());
         }
 
-        function showConfigForm() {
-            $('login-view').classList.add('hidden');
-            $('config-form').classList.remove('hidden');
-            setConfigMessage('', false);
+        function sortModels(models) {
+            return [...models].sort((left, right) => {
+                const providerDelta = providerSortOrder(left.provider) - providerSortOrder(right.provider);
+                if (providerDelta !== 0) return providerDelta;
+                const sortDelta = numberFromInput(left.sortOrder, 9999) - numberFromInput(right.sortOrder, 9999);
+                if (sortDelta !== 0) return sortDelta;
+                return String(left.name || '').localeCompare(String(right.name || ''));
+            });
         }
 
-        function authHeaders() {
-            return { Authorization: `Bearer ${state.token}` };
+        function providerSortOrder(provider) {
+            const order = { OPENAI: 10, GOOGLE: 20, DEEPSEEK: 30, MINIMAXAI: 40, ANTHROPIC: 50, MIDJOURNEY: 60, OTHER: 999 };
+            return order[String(provider || 'OTHER').trim().toUpperCase()] || 900;
         }
+
+        function nextSortOrder() {
+            const values = (state.config.models || []).map((model) => numberFromInput(model.sortOrder, 0));
+            return Math.max(0, ...values) + 10;
+        }
+
+        function showLogin() { $('login-view').classList.remove('hidden'); $('config-form').classList.add('hidden'); }
+        function showConfigForm() { $('login-view').classList.add('hidden'); $('config-form').classList.remove('hidden'); setConfigMessage('', false); }
+        function authHeaders() { return { Authorization: `Bearer ${state.token}` }; }
 
         function setConfigMessage(message, isError) {
             $('config-message').textContent = message || '';
@@ -492,73 +450,26 @@
             el.classList.remove('hidden');
         }
 
-        function getProviderInitial(provider) {
-            if (!provider) return '?';
-            if (provider === 'OPENAI') return 'O';
-            if (provider === 'ANTHROPIC') return 'A';
-            if (provider === 'GOOGLE') return 'G';
-            if (provider === 'MIDJOURNEY') return 'M';
-            return provider.charAt(0).toUpperCase();
-        }
-
-        function mergeDiscoveredModels(existing, discovered) {
-            const map = new Map();
-            existing.forEach((model) => {
-                map.set(`${model.name}_${model.channel}`, model);
-            });
-            discovered.forEach((model) => {
-                const key = `${model.name}_${model.channel}`;
-                if (!map.has(key)) map.set(key, model);
-            });
-            return Array.from(map.values());
-        }
-
-        function providerOptions(current) {
-            const providers = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'MIDJOURNEY', 'OTHER'];
-            return providers.map((provider) => (
-                `<option value="${provider}" ${provider === current ? 'selected' : ''}>${labelProvider(provider)}</option>`
-            )).join('');
-        }
-
         function labelProvider(provider) {
-            const labels = {
-                OPENAI: 'OpenAI',
-                ANTHROPIC: 'Anthropic',
-                GOOGLE: 'Google',
-                MIDJOURNEY: 'Midjourney',
-                OTHER: '其他',
-            };
-            return labels[String(provider || '').toUpperCase()] || provider || '其他';
+            const labels = { OPENAI: 'OpenAI', GOOGLE: 'Google', DEEPSEEK: 'DeepSeek', MINIMAXAI: 'MiniMax', ANTHROPIC: 'Anthropic', MIDJOURNEY: 'Midjourney', OTHER: '其他' };
+            return labels[String(provider || '').trim().toUpperCase()] || provider || '其他';
         }
 
         function labelChannel(channel) {
-            const labels = {
-                DEFAULT: '默认渠道',
-                PLUS: '增强渠道',
-                VIP: '高级渠道',
-                CLAUDE: 'Claude 渠道',
-                GEMINI: 'Gemini 渠道',
-                FAST: '快速渠道',
-            };
-            return labels[String(channel || '').toUpperCase()] || channel || '默认渠道';
+            const labels = { DEFAULT: '默认渠道', PLUS: '增强渠道', VIP: '高级渠道', CLAUDE: 'Claude 渠道', GEMINI: 'Gemini 渠道', FAST: '快速渠道' };
+            return labels[String(channel || '').trim().toUpperCase()] || channel || '默认渠道';
         }
 
-        function formatLatency(ms) {
-            return (Number(ms || 0) / 1000).toFixed(2);
+        function getProviderInitial(provider) {
+            const text = labelProvider(provider);
+            return text ? text.charAt(0).toUpperCase() : '?';
         }
 
-        function numberValue(id) {
-            return Number($(id).value);
-        }
-
+        function formatLatency(ms) { return (Number(ms || 0) / 1000).toFixed(2); }
+        function numberValue(id) { return Number($(id).value); }
+        function numberFromInput(value, fallback) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
         function escapeHtml(value) {
-            return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;',
-            }[char]));
+            return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
         }
 
         fetchData();

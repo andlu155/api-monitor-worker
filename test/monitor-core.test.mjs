@@ -9,6 +9,8 @@ import {
   discoverModels,
   labelProvider,
   labelChannel,
+  inferProvider,
+  sortConfiguredModels,
 } from '../src/monitor-core.mjs';
 
 test('builds a usable default config from environment values', () => {
@@ -58,7 +60,7 @@ test('mergeConfigUpdate preserves existing API key when submitted value is empty
   assert.equal(merged.apiKey, 'sk-existing-secret');
   assert.equal(merged.pollIntervalMinutes, 10);
   assert.deepEqual(merged.models, [
-    { name: 'gpt-4o', provider: 'OPENAI', channel: 'VIP', enabled: true },
+    { name: 'gpt-4o', provider: 'OPENAI', channel: 'VIP', enabled: true, sortOrder: 9999 },
   ]);
 });
 
@@ -127,18 +129,40 @@ test('discoverModels fetches model ids and infers providers for configuration im
   });
 
   assert.deepEqual(models, [
-    { name: 'gpt-4o', provider: 'OPENAI', channel: 'DEFAULT', enabled: true },
-    { name: 'claude-3-5-sonnet', provider: 'ANTHROPIC', channel: 'DEFAULT', enabled: true },
-    { name: 'gemini-1.5-pro', provider: 'GOOGLE', channel: 'DEFAULT', enabled: true },
+    { name: 'gpt-4o', provider: 'OPENAI', channel: 'DEFAULT', enabled: true, sortOrder: 10 },
+    { name: 'claude-3-5-sonnet', provider: 'ANTHROPIC', channel: 'DEFAULT', enabled: true, sortOrder: 20 },
+    { name: 'gemini-1.5-pro', provider: 'GOOGLE', channel: 'DEFAULT', enabled: true, sortOrder: 30 },
   ]);
 });
 
 test('labels provider and channel values in Chinese for display', () => {
   assert.equal(labelProvider('OPENAI'), 'OpenAI');
-  assert.equal(labelProvider('ANTHROPIC'), 'Anthropic');
-  assert.equal(labelProvider('GOOGLE'), 'Google');
-  assert.equal(labelProvider('MIDJOURNEY'), 'Midjourney');
+  assert.equal(labelProvider('DEEPSEEK'), 'DeepSeek');
+  assert.equal(labelProvider('MINIMAXAI'), 'MiniMax');
   assert.equal(labelProvider('OTHER'), '其他');
   assert.equal(labelChannel('DEFAULT'), '默认渠道');
   assert.equal(labelChannel('VIP'), '高级渠道');
+});
+
+test('infers deepseek and minimaxai providers from model names', () => {
+  assert.equal(inferProvider('deepseek-chat'), 'DEEPSEEK');
+  assert.equal(inferProvider('minimaxai-abcd'), 'MINIMAXAI');
+});
+
+test('sorts configured models by provider order then model order', () => {
+  const models = sortConfiguredModels([
+    { name: 'z-1', provider: 'OPENAI', sortOrder: 20 },
+    { name: 'a-1', provider: 'DEEPSEEK', sortOrder: 10 },
+    { name: 'b-1', provider: 'GOOGLE', sortOrder: 5 },
+    { name: 'c-1', provider: 'OPENAI', sortOrder: 5 },
+    { name: 'd-1', provider: 'MINIMAXAI', sortOrder: 1 },
+  ]);
+
+  assert.deepEqual(models.map((model) => model.name), [
+    'c-1',
+    'z-1',
+    'b-1',
+    'a-1',
+    'd-1',
+  ]);
 });

@@ -2,17 +2,28 @@ export const CONFIG_KV_KEY = 'monitor_config';
 export const LATEST_STATUS_KV_KEY = 'latest_status';
 export const HISTORY_STATUS_KV_KEY = 'history_status';
 
+export const DEFAULT_PROVIDER_ORDER = {
+  OPENAI: 10,
+  GOOGLE: 20,
+  DEEPSEEK: 30,
+  MINIMAXAI: 40,
+  ANTHROPIC: 50,
+  MIDJOURNEY: 60,
+  OTHER: 999,
+};
+
 export const DEFAULT_MODELS = [
-  { name: 'gpt-3.5-turbo', provider: 'OPENAI', channel: 'DEFAULT', enabled: true },
-  { name: 'gpt-4', provider: 'OPENAI', channel: 'DEFAULT', enabled: true },
-  { name: 'gpt-4-turbo', provider: 'OPENAI', channel: 'PLUS', enabled: true },
-  { name: 'gpt-4o', provider: 'OPENAI', channel: 'VIP', enabled: true },
-  { name: 'claude-3-haiku-20240307', provider: 'ANTHROPIC', channel: 'CLAUDE', enabled: true },
-  { name: 'claude-3-sonnet-20240229', provider: 'ANTHROPIC', channel: 'CLAUDE', enabled: true },
-  { name: 'claude-3-opus-20240229', provider: 'ANTHROPIC', channel: 'CLAUDE', enabled: true },
-  { name: 'gemini-pro', provider: 'GOOGLE', channel: 'GEMINI', enabled: true },
-  { name: 'gemini-1.5-pro', provider: 'GOOGLE', channel: 'GEMINI', enabled: true },
-  { name: 'mj-chat', provider: 'MIDJOURNEY', channel: 'FAST', enabled: true },
+  { name: 'gpt-3.5-turbo', provider: 'OPENAI', channel: 'DEFAULT', enabled: true, sortOrder: 10 },
+  { name: 'gpt-4', provider: 'OPENAI', channel: 'DEFAULT', enabled: true, sortOrder: 20 },
+  { name: 'gpt-4-turbo', provider: 'OPENAI', channel: 'PLUS', enabled: true, sortOrder: 30 },
+  { name: 'gpt-4o', provider: 'OPENAI', channel: 'VIP', enabled: true, sortOrder: 40 },
+  { name: 'gemini-pro', provider: 'GOOGLE', channel: 'GEMINI', enabled: true, sortOrder: 10 },
+  { name: 'gemini-1.5-pro', provider: 'GOOGLE', channel: 'GEMINI', enabled: true, sortOrder: 20 },
+  { name: 'deepseek-chat', provider: 'DEEPSEEK', channel: 'DEFAULT', enabled: true, sortOrder: 10 },
+  { name: 'claude-3-haiku-20240307', provider: 'ANTHROPIC', channel: 'CLAUDE', enabled: true, sortOrder: 10 },
+  { name: 'claude-3-sonnet-20240229', provider: 'ANTHROPIC', channel: 'CLAUDE', enabled: true, sortOrder: 20 },
+  { name: 'claude-3-opus-20240229', provider: 'ANTHROPIC', channel: 'CLAUDE', enabled: true, sortOrder: 30 },
+  { name: 'mj-chat', provider: 'MIDJOURNEY', channel: 'FAST', enabled: true, sortOrder: 10 },
 ];
 
 export function buildDefaultConfig(env = {}) {
@@ -82,7 +93,7 @@ export function normalizeConfig(config = {}) {
       warnLatencyMs,
       errorLatencyMs,
     },
-    models: normalizeModels(config.models),
+    models: sortConfiguredModels(normalizeModels(config.models)),
   };
 }
 
@@ -103,7 +114,7 @@ export async function runHealthCheck({
     modelsToMonitor = await discoverModels({ config: activeConfig, fetchImpl });
   }
 
-  modelsToMonitor = modelsToMonitor.slice(0, activeConfig.maxModelsToPing);
+  modelsToMonitor = sortConfiguredModels(modelsToMonitor).slice(0, activeConfig.maxModelsToPing);
 
   const statuses = await mapWithConcurrency(
     modelsToMonitor,
@@ -135,11 +146,12 @@ export async function discoverModels({ config, fetchImpl = fetch } = {}) {
     }
 
     const modelsData = await response.json();
-    return normalizeModels((modelsData.data || []).map((model) => ({
+    return normalizeModels((modelsData.data || []).map((model, index) => ({
       name: model.id,
       provider: inferProvider(model.id),
       channel: 'DEFAULT',
       enabled: true,
+      sortOrder: (index + 1) * 10,
     })));
   } catch (err) {
     throw new Error(err?.message || '获取模型失败');
@@ -151,10 +163,12 @@ export function labelProvider(provider) {
     OPENAI: 'OpenAI',
     ANTHROPIC: 'Anthropic',
     GOOGLE: 'Google',
+    DEEPSEEK: 'DeepSeek',
+    MINIMAXAI: 'MiniMax',
     MIDJOURNEY: 'Midjourney',
     OTHER: '其他',
   };
-  return labels[String(provider || '').toUpperCase()] || String(provider || '其他');
+  return labels[normalizeProvider(provider)] || String(provider || '其他');
 }
 
 export function labelChannel(channel) {
@@ -169,6 +183,18 @@ export function labelChannel(channel) {
   return labels[String(channel || '').toUpperCase()] || String(channel || '默认渠道');
 }
 
+export function sortConfiguredModels(models = []) {
+  return [...models].sort((left, right) => {
+    const providerDelta = providerSortOrder(left.provider) - providerSortOrder(right.provider);
+    if (providerDelta !== 0) return providerDelta;
+
+    const modelDelta = numericSort(left.sortOrder, 9999) - numericSort(right.sortOrder, 9999);
+    if (modelDelta !== 0) return modelDelta;
+
+    return String(left.name || '').localeCompare(String(right.name || ''));
+  });
+}
+
 export function formatForFrontend(statuses = []) {
   const modelMap = new Map();
 
@@ -178,6 +204,7 @@ export function formatForFrontend(statuses = []) {
         name: result.name,
         provider: result.provider,
         channels: [],
+        sortOrder: result.sortOrder,
       });
     }
 
@@ -192,7 +219,7 @@ export function formatForFrontend(statuses = []) {
     });
   }
 
-  return Array.from(modelMap.values());
+  return sortConfiguredModels(Array.from(modelMap.values()));
 }
 
 export function createStatusPayload({ statuses = [], config, urlOverride = '' }) {
@@ -212,6 +239,17 @@ export function createStatusPayload({ statuses = [], config, urlOverride = '' })
       hasApiKey: safeConfig.hasApiKey,
     },
   };
+}
+
+export function inferProvider(name = '') {
+  const lower = String(name).toLowerCase();
+  if (lower.includes('deepseek')) return 'DEEPSEEK';
+  if (lower.includes('minimaxai') || lower.includes('minimax')) return 'MINIMAXAI';
+  if (lower.includes('claude') || lower.includes('anthropic')) return 'ANTHROPIC';
+  if (lower.includes('gemini') || lower.includes('palm')) return 'GOOGLE';
+  if (lower.includes('midjourney') || lower.startsWith('mj-')) return 'MIDJOURNEY';
+  if (lower.includes('gpt') || lower.includes('dall-e') || lower.includes('whisper')) return 'OPENAI';
+  return 'OTHER';
 }
 
 async function pingModel({ model, config, historyData, fetchImpl, now }) {
@@ -271,6 +309,7 @@ async function pingModel({ model, config, historyData, fetchImpl, now }) {
     name: model.name,
     provider: model.provider,
     channel: model.channel,
+    sortOrder: model.sortOrder,
     latency,
     status,
     availability,
@@ -300,24 +339,27 @@ function normalizeModels(models) {
   return source
     .map((model) => ({
       name: typeof model.name === 'string' ? model.name.trim() : '',
-      provider: typeof model.provider === 'string'
-        ? model.provider.trim().toUpperCase()
-        : inferProvider(model.name || ''),
+      provider: normalizeProvider(model.provider || inferProvider(model.name || '')),
       channel: typeof model.channel === 'string' && model.channel.trim()
         ? model.channel.trim()
         : 'DEFAULT',
       enabled: model.enabled !== false,
+      sortOrder: numericSort(model.sortOrder, 9999),
     }))
     .filter((model) => model.name);
 }
 
-function inferProvider(name = '') {
-  const lower = String(name).toLowerCase();
-  if (lower.includes('claude') || lower.includes('anthropic')) return 'ANTHROPIC';
-  if (lower.includes('gemini') || lower.includes('palm')) return 'GOOGLE';
-  if (lower.includes('midjourney') || lower.startsWith('mj-')) return 'MIDJOURNEY';
-  if (lower.includes('gpt') || lower.includes('dall-e') || lower.includes('whisper')) return 'OPENAI';
-  return 'OTHER';
+function providerSortOrder(provider) {
+  return DEFAULT_PROVIDER_ORDER[normalizeProvider(provider)] ?? 900;
+}
+
+function normalizeProvider(provider) {
+  return String(provider || 'OTHER').trim().toUpperCase() || 'OTHER';
+}
+
+function numericSort(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function maskSecret(secret = '') {
