@@ -1,5 +1,4 @@
 const express = require('express');
-const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -10,7 +9,7 @@ const configFile = process.env.CONFIG_FILE || path.join(__dirname, 'data', 'conf
 const adminPassword = process.env.ADMIN_PASSWORD || '';
 
 let monitorCorePromise = import('./src/monitor-core.mjs');
-let cronTask = null;
+let intervalTimer = null;
 let latestStatus = [];
 let historyStatus = {};
 const sessions = new Map();
@@ -92,24 +91,39 @@ async function performHealthCheck() {
     return { config, statuses: latestStatus };
 }
 
-function scheduleHealthCheck(config) {
-    if (cronTask) {
-        cronTask.stop();
-        cronTask = null;
+function scheduleHealthCheck(config, options = {}) {
+    if (intervalTimer) {
+        clearInterval(intervalTimer);
+        intervalTimer = null;
     }
 
     const interval = Math.max(1, Number(config.pollIntervalMinutes) || 1);
-    const cronExpression = `*/${interval} * * * *`;
-    cronTask = cron.schedule(cronExpression, () => {
+    const intervalMs = interval * 60 * 1000;
+    intervalTimer = setInterval(() => {
         performHealthCheck().catch((err) => {
             console.error(`定时检测失败: ${err.message}`);
         });
-    });
+    }, intervalMs);
+
+    if (typeof intervalTimer.unref === 'function') {
+        intervalTimer.unref();
+    }
+
+    if (options.runImmediately) {
+        performHealthCheck().catch((err) => {
+            console.error(`首次检测失败: ${err.message}`);
+        });
+    }
 }
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'index.html'));
 });
+
+app.use('/assets', express.static(path.join(__dirname, 'src', 'assets'), {
+    immutable: true,
+    maxAge: '1y',
+}));
 
 app.post('/api/admin/login', (req, res) => {
     if (!adminPassword) {
@@ -176,13 +190,10 @@ app.get('/api/status', async (req, res) => {
 
 loadConfig()
     .then((config) => {
-        scheduleHealthCheck(config);
         app.listen(port, () => {
             console.log(`API Monitor listening at http://localhost:${port}`);
-            console.log(`Cron job is scheduled (Interval: ${config.pollIntervalMinutes}m).`);
-            performHealthCheck().catch((err) => {
-                console.error(`首次检测失败: ${err.message}`);
-            });
+            console.log(`Health check interval is scheduled (${config.pollIntervalMinutes}m).`);
+            scheduleHealthCheck(config, { runImmediately: true });
         });
     })
     .catch((err) => {

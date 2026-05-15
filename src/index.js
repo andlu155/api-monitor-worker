@@ -1,4 +1,5 @@
 import html from './index.html';
+import { HERO_IMAGE_BASE64 } from './hero-image.js';
 import {
     CONFIG_KV_KEY,
     HISTORY_STATUS_KV_KEY,
@@ -9,9 +10,11 @@ import {
     mergeConfigUpdate,
     runHealthCheck,
     sanitizeConfig,
+    shouldRunScheduledCheck,
 } from './monitor-core.mjs';
 
 const SESSION_PREFIX = 'admin_session:';
+const LAST_CHECK_AT_KV_KEY = 'last_check_at';
 
 export default {
     async fetch(request, env, ctx) {
@@ -19,6 +22,10 @@ export default {
 
         if (url.pathname === '/') {
             return htmlResponse(html);
+        }
+
+        if (url.pathname === '/assets/api-monitor-hero.png') {
+            return imageResponse(HERO_IMAGE_BASE64, 'image/png');
         }
 
         if (request.method === 'POST' && url.pathname === '/api/admin/login') {
@@ -97,7 +104,7 @@ export default {
     },
 
     async scheduled(event, env, ctx) {
-        ctx.waitUntil(performHealthCheck(env));
+        ctx.waitUntil(performScheduledHealthCheck(env));
     },
 };
 
@@ -150,9 +157,25 @@ async function performHealthCheck(env) {
     if (env.MONITOR_KV) {
         await env.MONITOR_KV.put(LATEST_STATUS_KV_KEY, JSON.stringify(result.statuses));
         await env.MONITOR_KV.put(HISTORY_STATUS_KV_KEY, JSON.stringify(result.historyData));
+        await env.MONITOR_KV.put(LAST_CHECK_AT_KV_KEY, String(Date.now()));
     }
 
     return { config, statuses: result.statuses };
+}
+
+async function performScheduledHealthCheck(env) {
+    const config = await loadConfig(env);
+    const lastCheckedAt = await readText(env, LAST_CHECK_AT_KV_KEY, '');
+
+    if (!shouldRunScheduledCheck({
+        lastCheckedAt: Number(lastCheckedAt),
+        now: Date.now(),
+        intervalMinutes: config.pollIntervalMinutes,
+    })) {
+        return { skipped: true, config };
+    }
+
+    return performHealthCheck(env);
 }
 
 async function loadConfig(env) {
@@ -179,9 +202,25 @@ async function readJson(env, key, fallback) {
     }
 }
 
+async function readText(env, key, fallback) {
+    if (!env.MONITOR_KV) return fallback;
+    const value = await env.MONITOR_KV.get(key);
+    return value || fallback;
+}
+
 function htmlResponse(body) {
     return new Response(body, {
         headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+    });
+}
+
+function imageResponse(base64, contentType) {
+    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+    return new Response(bytes, {
+        headers: {
+            'Content-Type': contentType,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+        },
     });
 }
 

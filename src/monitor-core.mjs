@@ -31,6 +31,11 @@ export const DEFAULT_CHANNELS = [
   { id: 'FAST', label: '快速渠道' },
 ];
 
+export const DEFAULT_HOME_IMAGE = {
+  enabled: false,
+  url: '/assets/api-monitor-hero.png',
+};
+
 export const DEFAULT_MODELS = [
   { name: 'gpt-3.5-turbo', provider: 'OPENAI', channel: 'DEFAULT', enabled: true, sortOrder: 10 },
   { name: 'gpt-4', provider: 'OPENAI', channel: 'DEFAULT', enabled: true, sortOrder: 20 },
@@ -59,6 +64,7 @@ export function buildDefaultConfig(env = {}) {
     },
     providers: DEFAULT_PROVIDERS,
     channels: DEFAULT_CHANNELS,
+    homeImage: DEFAULT_HOME_IMAGE,
     models: DEFAULT_MODELS,
   });
 }
@@ -78,6 +84,7 @@ export function mergeConfigUpdate(currentConfig, update = {}) {
     },
     providers: Array.isArray(update.providers) ? update.providers : current.providers,
     channels: Array.isArray(update.channels) ? update.channels : current.channels,
+    homeImage: isPlainObject(update.homeImage) ? update.homeImage : current.homeImage,
     models: Array.isArray(update.models) ? update.models : current.models,
   };
 
@@ -127,6 +134,7 @@ export function normalizeConfig(config = {}) {
     },
     providers,
     channels,
+    homeImage: normalizeHomeImage(config.homeImage),
     models: sortConfiguredModels(models, { providers, channels }),
   };
 }
@@ -253,6 +261,7 @@ export function createStatusPayload({ statuses = [], config, urlOverride = '' })
     models: formatForFrontend(statuses),
     url: safeConfig.targetApiUrl || urlOverride || '',
     interval: safeConfig.pollIntervalMinutes,
+    homeImage: safeConfig.homeImage,
     configSummary: {
       pollIntervalMinutes: safeConfig.pollIntervalMinutes,
       requestTimeoutMs: safeConfig.requestTimeoutMs,
@@ -264,6 +273,17 @@ export function createStatusPayload({ statuses = [], config, urlOverride = '' })
       hasApiKey: safeConfig.hasApiKey,
     },
   };
+}
+
+export function shouldRunScheduledCheck({ lastCheckedAt, now = Date.now(), intervalMinutes } = {}) {
+  const intervalMs = Math.max(1, Number(intervalMinutes) || 1) * 60_000;
+  const previous = Number(lastCheckedAt);
+  const current = Number(now);
+
+  if (!Number.isFinite(current)) return false;
+  if (!Number.isFinite(previous) || previous <= 0) return true;
+
+  return current - previous >= intervalMs;
 }
 
 export function inferProvider(name = '') {
@@ -396,6 +416,19 @@ function normalizeOption(option) {
     ? option.label.trim()
     : id;
   return { id, label };
+}
+
+function normalizeHomeImage(homeImage) {
+  if (!isPlainObject(homeImage)) return { ...DEFAULT_HOME_IMAGE };
+
+  const url = typeof homeImage.url === 'string' && homeImage.url.trim()
+    ? homeImage.url.trim()
+    : DEFAULT_HOME_IMAGE.url;
+
+  return {
+    enabled: homeImage.enabled === true,
+    url,
+  };
 }
 
 function buildOptionOrder(options) {

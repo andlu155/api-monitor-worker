@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background: #0b0c10; color: #d6d8dc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Roboto, Arial, sans-serif; font-size: 13px; line-height: 1.5; }
+        body.has-home-image { background-image: linear-gradient(90deg, rgba(11, 12, 16, 0.96) 0%, rgba(11, 12, 16, 0.82) 46%, rgba(11, 12, 16, 0.66) 100%), var(--home-image-url); background-size: cover; background-position: center top; background-attachment: fixed; }
         .card { background: #141821; border: 1px solid #29313d; border-radius: 8px; box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2); }
         .panel { background: #111720; border: 1px solid #2d3542; border-radius: 8px; }
         .channel-card { background: #1b2130; border: 1px solid #30394a; border-radius: 6px; }
@@ -77,6 +78,23 @@
                     <label class="block"><span class="block text-gray-400 mb-1">警告阈值（秒）</span><input id="warnLatencyMs" class="field" type="number" min="0.1" max="60" step="0.1"></label>
                     <label class="block"><span class="block text-gray-400 mb-1">异常阈值（秒）</span><input id="errorLatencyMs" class="field" type="number" min="0.1" max="120" step="0.1"></label>
                 </div>
+
+                <section class="panel p-3">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <div class="text-white font-bold">首页图片</div>
+                            <div class="text-[11px] text-gray-500">开启后使用下方图片作为首页背景；关闭后保持当前默认背景。</div>
+                        </div>
+                        <label class="choice">
+                            <input id="homeImageEnabled" type="checkbox">
+                            <span>启用首页图片</span>
+                        </label>
+                    </div>
+                    <label class="block mt-3">
+                        <span class="block text-gray-400 mb-1">图片地址</span>
+                        <input id="homeImageUrl" class="field" placeholder="/assets/api-monitor-hero.png">
+                    </label>
+                </section>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <section class="panel p-3">
@@ -177,6 +195,7 @@
                     resetFetchInterval(data.interval);
                 }
                 renderSummary(data.configSummary);
+                applyHomeImage(data.homeImage);
                 if (data.error) showNotice(data.error, 'warn');
                 renderData(data.models || []);
             } catch (error) {
@@ -305,6 +324,8 @@
             $('maxConcurrency').value = config.maxConcurrency;
             $('warnLatencyMs').value = msToSeconds(config.thresholds.warnLatencyMs);
             $('errorLatencyMs').value = msToSeconds(config.thresholds.errorLatencyMs);
+            $('homeImageEnabled').checked = config.homeImage?.enabled === true;
+            $('homeImageUrl').value = config.homeImage?.url || '/assets/api-monitor-hero.png';
             renderOptionManagers();
             renderConfigModels();
         }
@@ -324,8 +345,22 @@
                 },
                 providers: state.config.providers,
                 channels: state.config.channels,
+                homeImage: {
+                    enabled: $('homeImageEnabled').checked,
+                    url: $('homeImageUrl').value,
+                },
                 models: collectGroupedModels(),
             };
+        }
+
+        function applyHomeImage(homeImage) {
+            const enabled = homeImage?.enabled === true && homeImage?.url;
+            document.body.classList.toggle('has-home-image', Boolean(enabled));
+            if (enabled) {
+                document.body.style.setProperty('--home-image-url', `url("${String(homeImage.url).replace(/"/g, '%22')}")`);
+            } else {
+                document.body.style.removeProperty('--home-image-url');
+            }
         }
 
         function renderOptionManagers() {

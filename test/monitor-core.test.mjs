@@ -10,6 +10,7 @@ import {
   labelProvider,
   labelChannel,
   inferProvider,
+  shouldRunScheduledCheck,
   sortConfiguredModels,
 } from '../src/monitor-core.mjs';
 
@@ -29,6 +30,10 @@ test('builds a usable default config from environment values', () => {
   assert.equal(config.thresholds.errorLatencyMs, 10000);
   assert.ok(config.providers.some((provider) => provider.id === 'OPENAI' && provider.label === 'OpenAI'));
   assert.ok(config.channels.some((channel) => channel.id === 'DEFAULT' && channel.label === '默认渠道'));
+  assert.deepEqual(config.homeImage, {
+    enabled: false,
+    url: '/assets/api-monitor-hero.png',
+  });
 });
 
 test('sanitizeConfig masks sensitive values without exposing the real API key', () => {
@@ -75,6 +80,20 @@ test('mergeConfigUpdate preserves custom provider and channel options', () => {
   ]);
   assert.equal(labelProvider('LOCAL', merged.providers), '本地供应商');
   assert.equal(labelChannel('BACKUP', merged.channels), '备用渠道');
+});
+
+test('mergeConfigUpdate preserves homepage image settings', () => {
+  const merged = mergeConfigUpdate(buildDefaultConfig(), {
+    homeImage: {
+      enabled: true,
+      url: ' https://example.test/hero.png ',
+    },
+  });
+
+  assert.deepEqual(merged.homeImage, {
+    enabled: true,
+    url: 'https://example.test/hero.png',
+  });
 });
 
 test('legacy model providers and channels are added to option lists', () => {
@@ -237,4 +256,34 @@ test('sorts multi-channel model entries by model order then channel order', () =
     'first:BACKUP',
     'later:DEFAULT',
   ]);
+});
+
+test('scheduled checks run only when the configured interval has elapsed', () => {
+  const minute = 60_000;
+
+  assert.equal(shouldRunScheduledCheck({
+    lastCheckedAt: 0,
+    now: 59 * minute,
+    intervalMinutes: 59,
+  }), true);
+
+  assert.equal(shouldRunScheduledCheck({
+    lastCheckedAt: 59 * minute,
+    now: 60 * minute,
+    intervalMinutes: 59,
+  }), false);
+
+  assert.equal(shouldRunScheduledCheck({
+    lastCheckedAt: 59 * minute,
+    now: 118 * minute,
+    intervalMinutes: 59,
+  }), true);
+});
+
+test('scheduled checks run when there is no previous check timestamp', () => {
+  assert.equal(shouldRunScheduledCheck({
+    lastCheckedAt: null,
+    now: 1_000,
+    intervalMinutes: 59,
+  }), true);
 });
