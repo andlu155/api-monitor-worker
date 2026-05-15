@@ -65,6 +65,7 @@
                 <label class="block text-gray-400 mb-1">管理员密码</label>
                 <input id="admin-password" class="field mb-3" type="password" autocomplete="current-password">
                 <button id="login-btn" class="w-full px-3 py-2 rounded bg-green-600 text-white font-medium hover:bg-green-500">登录</button>
+                <div id="login-message" class="mt-3 min-h-5 text-[12px]"></div>
             </div>
 
             <form id="config-form" class="hidden space-y-5">
@@ -221,6 +222,7 @@
 
         async function login() {
             try {
+                setLoginMessage('正在登录...', false);
                 const response = await fetch('/api/admin/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -231,9 +233,10 @@
                 state.token = data.token;
                 localStorage.setItem('adminToken', state.token);
                 $('admin-password').value = '';
+                setLoginMessage('登录成功，正在加载配置...', false);
                 await loadConfig();
             } catch (error) {
-                setConfigMessage(error.message, true);
+                setLoginMessage(error.message || '密码错误', true);
             }
         }
 
@@ -249,7 +252,7 @@
                 state.token = '';
                 localStorage.removeItem('adminToken');
                 showLogin();
-                setConfigMessage(error.message, true);
+                setLoginMessage(error.message, true);
             }
         }
 
@@ -658,8 +661,13 @@
         }
 
         function showLogin() { $('login-view').classList.remove('hidden'); $('config-form').classList.add('hidden'); }
-        function showConfigForm() { $('login-view').classList.add('hidden'); $('config-form').classList.remove('hidden'); setConfigMessage('', false); }
+        function showConfigForm() { $('login-view').classList.add('hidden'); $('config-form').classList.remove('hidden'); setLoginMessage('', false); setConfigMessage('', false); }
         function authHeaders() { return { Authorization: `Bearer ${state.token}` }; }
+
+        function setLoginMessage(message, isError) {
+            $('login-message').textContent = message || '';
+            $('login-message').className = isError ? 'mt-3 min-h-5 text-[12px] text-red-300' : 'mt-3 min-h-5 text-[12px] text-green-300';
+        }
 
         function setConfigMessage(message, isError) {
             $('config-message').textContent = message || '';

@@ -6,9 +6,11 @@ const crypto = require('crypto');
 const app = express();
 const port = process.env.PORT || 3000;
 const configFile = process.env.CONFIG_FILE || path.join(__dirname, 'data', 'config.json');
+const statusFile = process.env.STATUS_FILE || path.join(__dirname, 'data', 'status.json');
 const adminPassword = process.env.ADMIN_PASSWORD || '';
 
 let monitorCorePromise = import('./src/monitor-core.mjs');
+let statusStorePromise = import('./src/status-store.mjs');
 let intervalTimer = null;
 let latestStatus = [];
 let historyStatus = {};
@@ -18,6 +20,10 @@ app.use(express.json({ limit: '1mb' }));
 
 async function core() {
     return monitorCorePromise;
+}
+
+async function statusStore() {
+    return statusStorePromise;
 }
 
 async function loadConfig() {
@@ -77,6 +83,7 @@ function requireAdmin(req, res, next) {
 
 async function performHealthCheck() {
     const { runHealthCheck } = await core();
+    const { saveStatusSnapshot } = await statusStore();
     const config = await loadConfig();
     console.log(`Starting API Health Check... (Interval: ${config.pollIntervalMinutes}m)`);
 
@@ -88,6 +95,11 @@ async function performHealthCheck() {
 
     latestStatus = result.statuses;
     historyStatus = result.historyData;
+    saveStatusSnapshot(statusFile, {
+        latestStatus,
+        historyStatus,
+        lastCheckedAt: Date.now(),
+    });
     return { config, statuses: latestStatus };
 }
 
@@ -190,6 +202,13 @@ app.get('/api/status', async (req, res) => {
 
 loadConfig()
     .then((config) => {
+        return Promise.all([Promise.resolve(config), statusStore()]);
+    })
+    .then(([config, store]) => {
+        const snapshot = store.loadStatusSnapshot(statusFile);
+        latestStatus = snapshot.latestStatus;
+        historyStatus = snapshot.historyStatus;
+
         app.listen(port, () => {
             console.log(`API Monitor listening at http://localhost:${port}`);
             console.log(`Health check interval is scheduled (${config.pollIntervalMinutes}m).`);

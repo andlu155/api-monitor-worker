@@ -25,6 +25,7 @@ MAX_CONCURRENCY=5
 WARN_LATENCY_MS=3000
 ERROR_LATENCY_MS=10000
 CONFIG_FILE=./data/config.json
+STATUS_FILE=./data/status.json
 API_MONITOR_IMAGE=ghcr.io/your-github-username/api-monitor-worker:latest
 ```
 
@@ -64,7 +65,7 @@ npm install
 npm start
 ```
 
-默认监听 `3000` 端口。配置文件默认写入 `data/config.json`，可通过 `CONFIG_FILE` 修改。
+默认监听 `3000` 端口。配置文件默认写入 `data/config.json`，可通过 `CONFIG_FILE` 修改；检测状态和历史记录默认写入 `data/status.json`，可通过 `STATUS_FILE` 修改。
 
 ## Cloudflare Workers 部署
 
