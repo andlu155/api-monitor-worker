@@ -15,6 +15,7 @@
         .field:focus { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22); }
         .option-row { background: #0f141d; border: 1px solid #29313d; border-radius: 8px; padding: 0.65rem; }
         .choice { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid #364153; border-radius: 999px; padding: 0.35rem 0.6rem; color: #dbe1ea; background: #111827; }
+        .discovery-panel { background: #0f141d; border: 1px solid #2f3a4a; border-radius: 8px; }
         .dragging { opacity: 0.45; }
         .text-neon-green { color: #39ff14; }
         .text-neon-red { color: #ff3333; }
@@ -131,6 +132,33 @@
                             <button type="button" id="add-model-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">添加模型</button>
                         </div>
                     </div>
+                    <div id="discovered-models-panel" class="discovery-panel hidden mb-3 p-3">
+                        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <div class="text-white font-bold">选择要添加的模型</div>
+                                <div class="text-[11px] text-gray-500 mt-1">已在配置中的模型默认勾选，新发现模型默认不勾选；只有点击添加所选模型后才会进入监控配置。</div>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" id="select-all-discovered-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">全选</button>
+                                <button type="button" id="clear-discovered-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">取消全选</button>
+                                <button type="button" id="apply-discovered-btn" class="px-2 py-1 rounded bg-green-700 text-white hover:bg-green-600">添加所选模型</button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto border border-gray-800 rounded mt-3">
+                            <table class="w-full min-w-[720px] text-left">
+                                <thead class="bg-gray-900 text-gray-500 uppercase text-[10px]">
+                                    <tr>
+                                        <th class="p-2 w-16">选择</th>
+                                        <th class="p-2">模型</th>
+                                        <th class="p-2 w-44">供应商</th>
+                                        <th class="p-2 w-44">渠道</th>
+                                        <th class="p-2 w-28">状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="discovered-models-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
                     <div class="overflow-x-auto border border-gray-800 rounded">
                         <table class="w-full min-w-[960px] text-left">
                             <thead class="bg-gray-900 text-gray-500 uppercase text-[10px]">
@@ -158,13 +186,16 @@
     </div>
 
     <script>
-        const state = { token: localStorage.getItem('adminToken') || '', config: null, fetchInterval: null, draggingRow: null };
+        const state = { token: localStorage.getItem('adminToken') || '', config: null, fetchInterval: null, draggingRow: null, discoveredModels: [] };
         const $ = (id) => document.getElementById(id);
 
         $('config-btn').addEventListener('click', openConfig);
         $('close-modal-btn').addEventListener('click', () => $('modal').classList.add('hidden'));
         $('login-btn').addEventListener('click', login);
         $('discover-models-btn').addEventListener('click', discoverModels);
+        $('select-all-discovered-btn').addEventListener('click', () => setDiscoveredSelection(true));
+        $('clear-discovered-btn').addEventListener('click', () => setDiscoveredSelection(false));
+        $('apply-discovered-btn').addEventListener('click', applySelectedDiscoveredModels);
         $('add-provider-btn').addEventListener('click', () => {
             syncOptionsFromDom();
             state.config.providers.push(nextOption('PROVIDER', '新供应商', state.config.providers));
@@ -179,7 +210,10 @@
         });
         $('add-model-btn').addEventListener('click', () => {
             syncOptionsFromDom();
-            state.config.models.push({ name: '', provider: firstOptionId(state.config.providers, 'OTHER'), channel: firstOptionId(state.config.channels, 'DEFAULT'), enabled: true, sortOrder: nextSortOrder() });
+            state.config.models = appendManualModel(collectGroupedModels(), {
+                provider: firstOptionId(state.config.providers, 'OTHER'),
+                channel: firstOptionId(state.config.channels, 'DEFAULT'),
+            });
             renderConfigModels();
         });
         $('config-form').addEventListener('submit', async (event) => { event.preventDefault(); await saveConfig(false); });
@@ -306,11 +340,11 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || '获取模型失败');
                 syncOptionsFromDom();
-                state.config.models = sortModels(mergeDiscoveredModels(state.config.models || [], data.models || []));
                 data.models.forEach((model) => ensureProviderOption(model.provider));
                 renderOptionManagers();
-                renderConfigModels();
-                setConfigMessage(`已获取 ${data.models.length} 个模型，请保存配置`, false);
+                state.discoveredModels = buildDiscoveredModelChoices(collectGroupedModels(), data.models || []);
+                renderDiscoveredModels();
+                setConfigMessage(`已获取 ${data.models.length} 个模型，请勾选后添加`, false);
             } catch (error) {
                 setConfigMessage(error.message, true);
             }
@@ -329,6 +363,8 @@
             $('errorLatencyMs').value = msToSeconds(config.thresholds.errorLatencyMs);
             $('homeImageEnabled').checked = config.homeImage?.enabled === true;
             $('homeImageUrl').value = config.homeImage?.url || '/assets/api-monitor-hero.png';
+            state.discoveredModels = [];
+            renderDiscoveredModels();
             renderOptionManagers();
             renderConfigModels();
         }
@@ -427,6 +463,59 @@
                 });
                 addDragHandlers(row);
                 body.appendChild(row);
+            });
+        }
+
+        function renderDiscoveredModels() {
+            const panel = $('discovered-models-panel');
+            const body = $('discovered-models-body');
+            if (!panel || !body) return;
+            if (!state.discoveredModels.length) {
+                panel.classList.add('hidden');
+                body.innerHTML = '';
+                return;
+            }
+
+            panel.classList.remove('hidden');
+            body.innerHTML = '';
+            state.discoveredModels.forEach((choice, index) => {
+                const row = document.createElement('tr');
+                row.className = 'border-t border-gray-800';
+                row.innerHTML = `
+                    <td class="p-2"><input data-discovered-index="${index}" type="checkbox" ${choice.selected ? 'checked' : ''}></td>
+                    <td class="p-2 text-gray-100 font-mono">${escapeHtml(choice.model.name)}</td>
+                    <td class="p-2">${escapeHtml(labelProvider(choice.model.provider))}</td>
+                    <td class="p-2">${escapeHtml(labelChannel(choice.model.channel))}</td>
+                    <td class="p-2">${choice.exists ? '<span class="text-green-300">已存在</span>' : '<span class="text-gray-400">新发现</span>'}</td>
+                `;
+                row.querySelector('input').addEventListener('change', (event) => {
+                    choice.selected = event.target.checked;
+                });
+                body.appendChild(row);
+            });
+        }
+
+        function setDiscoveredSelection(selected) {
+            state.discoveredModels.forEach((choice) => { choice.selected = selected; });
+            renderDiscoveredModels();
+        }
+
+        function applySelectedDiscoveredModels() {
+            syncDiscoveredSelectionFromDom();
+            const before = collectGroupedModels();
+            const after = mergeSelectedDiscoveredModels(before, state.discoveredModels);
+            const added = after.length - before.length;
+            state.config.models = after;
+            state.discoveredModels = [];
+            renderDiscoveredModels();
+            renderConfigModels();
+            setConfigMessage(added > 0 ? `已添加 ${added} 个模型，请保存配置` : '没有新增模型需要添加', false);
+        }
+
+        function syncDiscoveredSelectionFromDom() {
+            document.querySelectorAll('[data-discovered-index]').forEach((input) => {
+                const choice = state.discoveredModels[Number(input.dataset.discoveredIndex)];
+                if (choice) choice.selected = input.checked;
             });
         }
 
@@ -544,7 +633,7 @@
 
         function groupModelsForEditor(models) {
             const map = new Map();
-            sortModels(models || []).forEach((model) => {
+            sortModelsForEditor(models || []).forEach((model) => {
                 const key = model.name || `__empty_${map.size}`;
                 if (!map.has(key)) {
                     map.set(key, {
@@ -561,6 +650,16 @@
                 group.enabled = group.enabled || model.enabled !== false;
             });
             return Array.from(map.values());
+        }
+
+        function sortModelsForEditor(models) {
+            return [...models].sort((left, right) => {
+                const sortDelta = numberFromInput(left.sortOrder, 9999) - numberFromInput(right.sortOrder, 9999);
+                if (sortDelta !== 0) return sortDelta;
+                const nameDelta = String(left.name || '').localeCompare(String(right.name || ''));
+                if (nameDelta !== 0) return nameDelta;
+                return optionIndex(left.channel, state.config?.channels || []) - optionIndex(right.channel, state.config?.channels || []);
+            });
         }
 
         function expandGroup(group, index) {
@@ -601,13 +700,61 @@
             });
         }
 
-        function mergeDiscoveredModels(existing, discovered) {
-            const map = new Map(existing.map((model) => [`${model.name}_${model.channel}`, model]));
-            discovered.forEach((model) => {
-                const key = `${model.name}_${model.channel}`;
-                if (!map.has(key)) map.set(key, model);
+        function buildDiscoveredModelChoices(existingModels, discoveredModels) {
+            const existingKeys = new Set((existingModels || []).map(modelKey));
+            const seen = new Set();
+            return (discoveredModels || []).map((model) => {
+                const normalized = normalizeDiscoveredModel(model);
+                if (!normalized.name) return null;
+                const key = modelKey(normalized);
+                if (seen.has(key)) return null;
+                seen.add(key);
+                const exists = existingKeys.has(key);
+                return { key, model: normalized, exists, selected: exists };
+            }).filter(Boolean);
+        }
+
+        function mergeSelectedDiscoveredModels(existingModels, choices) {
+            const merged = (existingModels || []).map((model) => ({ ...model }));
+            const existingKeys = new Set(merged.map(modelKey));
+            let order = nextSortOrderFromModels(merged);
+            (choices || []).forEach((choice) => {
+                if (!choice?.selected) return;
+                const model = normalizeDiscoveredModel(choice.model || {});
+                const key = modelKey(model);
+                if (!model.name || existingKeys.has(key)) return;
+                merged.push({ ...model, enabled: model.enabled !== false, sortOrder: order });
+                existingKeys.add(key);
+                order += 10;
             });
-            return Array.from(map.values());
+            return merged;
+        }
+
+        function appendManualModel(models, defaults) {
+            return [
+                ...(models || []),
+                {
+                    name: '',
+                    provider: defaults?.provider || 'OTHER',
+                    channel: defaults?.channel || 'DEFAULT',
+                    enabled: true,
+                    sortOrder: nextSortOrderFromModels(models || []),
+                },
+            ];
+        }
+
+        function normalizeDiscoveredModel(model) {
+            return {
+                name: String(model.name || '').trim(),
+                provider: model.provider || firstOptionId(state.config?.providers, 'OTHER'),
+                channel: model.channel || firstOptionId(state.config?.channels, 'DEFAULT'),
+                enabled: model.enabled !== false,
+                sortOrder: model.sortOrder,
+            };
+        }
+
+        function modelKey(model) {
+            return `${String(model.name || '').trim()}_${String(model.channel || 'DEFAULT').trim()}`;
         }
 
         function sortModels(models) {
@@ -632,7 +779,11 @@
         }
 
         function nextSortOrder() {
-            const values = (state.config.models || []).map((model) => numberFromInput(model.sortOrder, 0));
+            return nextSortOrderFromModels(state.config.models || []);
+        }
+
+        function nextSortOrderFromModels(models) {
+            const values = (models || []).map((model) => numberFromInput(model.sortOrder, 0));
             return Math.max(0, ...values) + 10;
         }
 
