@@ -12,7 +12,8 @@ export function buildDiscoveredModelChoices(existingModels = [], discoveredModel
       const exists = existingKeys.has(key);
       return { key, model: normalized, exists, selected: exists };
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .sort(compareDiscoveredChoices);
 }
 
 export function mergeSelectedDiscoveredModels(existingModels = [], choices = []) {
@@ -46,6 +47,16 @@ export function appendManualModel(models = [], defaults = {}) {
   ];
 }
 
+export function summarizeDiscoveredModelChoices(choices = []) {
+  return choices.reduce((summary, choice) => {
+    summary.total += 1;
+    if (choice?.exists) summary.existing += 1;
+    else summary.fresh += 1;
+    if (!choice?.exists && choice?.selected) summary.pendingAdd += 1;
+    return summary;
+  }, { total: 0, existing: 0, fresh: 0, pendingAdd: 0 });
+}
+
 export function modelKey(model = {}) {
   return `${String(model.name || '').trim()}_${String(model.channel || 'DEFAULT').trim()}`;
 }
@@ -63,4 +74,9 @@ function normalizeDiscoveredModel(model) {
 function nextSortOrder(models) {
   const values = models.map((model) => Number(model.sortOrder) || 0);
   return Math.max(0, ...values) + 10;
+}
+
+function compareDiscoveredChoices(left, right) {
+  if (left.exists !== right.exists) return left.exists ? 1 : -1;
+  return String(left.model.name || '').localeCompare(String(right.model.name || ''));
 }

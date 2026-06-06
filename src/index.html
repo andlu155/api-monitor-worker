@@ -16,6 +16,10 @@
         .option-row { background: #0f141d; border: 1px solid #29313d; border-radius: 8px; padding: 0.65rem; }
         .choice { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid #364153; border-radius: 999px; padding: 0.35rem 0.6rem; color: #dbe1ea; background: #111827; }
         .discovery-panel { background: #0f141d; border: 1px solid #2f3a4a; border-radius: 8px; }
+        .discovery-row-existing { background: rgba(34, 197, 94, 0.05); }
+        .discovery-row-new { background: rgba(15, 20, 29, 0.72); }
+        .discovery-row-pending { background: rgba(34, 197, 94, 0.12); box-shadow: inset 3px 0 0 #22c55e; }
+        .status-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.2rem 0.55rem; font-size: 11px; font-weight: 700; }
         .dragging { opacity: 0.45; }
         .text-neon-green { color: #39ff14; }
         .text-neon-red { color: #ff3333; }
@@ -132,33 +136,6 @@
                             <button type="button" id="add-model-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">添加模型</button>
                         </div>
                     </div>
-                    <div id="discovered-models-panel" class="discovery-panel hidden mb-3 p-3">
-                        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <div class="text-white font-bold">选择要添加的模型</div>
-                                <div class="text-[11px] text-gray-500 mt-1">已在配置中的模型默认勾选，新发现模型默认不勾选；只有点击添加所选模型后才会进入监控配置。</div>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <button type="button" id="select-all-discovered-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">全选</button>
-                                <button type="button" id="clear-discovered-btn" class="px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">取消全选</button>
-                                <button type="button" id="apply-discovered-btn" class="px-2 py-1 rounded bg-green-700 text-white hover:bg-green-600">添加所选模型</button>
-                            </div>
-                        </div>
-                        <div class="overflow-x-auto border border-gray-800 rounded mt-3">
-                            <table class="w-full min-w-[720px] text-left">
-                                <thead class="bg-gray-900 text-gray-500 uppercase text-[10px]">
-                                    <tr>
-                                        <th class="p-2 w-16">选择</th>
-                                        <th class="p-2">模型</th>
-                                        <th class="p-2 w-44">供应商</th>
-                                        <th class="p-2 w-44">渠道</th>
-                                        <th class="p-2 w-28">状态</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="discovered-models-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
                     <div class="overflow-x-auto border border-gray-800 rounded">
                         <table class="w-full min-w-[960px] text-left">
                             <thead class="bg-gray-900 text-gray-500 uppercase text-[10px]">
@@ -185,6 +162,60 @@
         </div>
     </div>
 
+    <div id="discovered-models-panel" class="hidden fixed inset-0 z-[60] bg-black/75 p-4">
+        <div class="discovery-panel mx-auto flex max-h-[88vh] max-w-6xl flex-col overflow-hidden shadow-2xl">
+            <div class="border-b border-gray-800 p-4">
+                <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <div class="text-white text-lg font-bold">选择要添加的模型</div>
+                        <div class="text-[12px] text-gray-400 mt-1">已存在模型默认勾选用于对照；新发现模型勾选后会标记为待添加，点击添加后才进入监控配置。</div>
+                    </div>
+                    <button type="button" id="close-discovered-btn" class="px-2.5 py-1.5 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">关闭</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mt-4 md:grid-cols-4">
+                    <div class="rounded border border-gray-800 bg-gray-950/50 px-3 py-2">
+                        <div class="text-[11px] text-gray-500">全部发现</div>
+                        <div id="discovered-total-count" class="text-lg font-bold text-white">0</div>
+                    </div>
+                    <div class="rounded border border-green-900/60 bg-green-950/20 px-3 py-2">
+                        <div class="text-[11px] text-green-300">已存在</div>
+                        <div id="discovered-existing-count" class="text-lg font-bold text-green-200">0</div>
+                    </div>
+                    <div class="rounded border border-blue-900/60 bg-blue-950/20 px-3 py-2">
+                        <div class="text-[11px] text-blue-300">新发现</div>
+                        <div id="discovered-new-count" class="text-lg font-bold text-blue-200">0</div>
+                    </div>
+                    <div class="rounded border border-emerald-800/70 bg-emerald-950/30 px-3 py-2">
+                        <div class="text-[11px] text-emerald-300">待添加</div>
+                        <div id="discovered-pending-count" class="text-lg font-bold text-emerald-200">0</div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-1 overflow-auto p-4">
+                <table class="w-full min-w-[780px] text-left">
+                    <thead class="sticky top-0 bg-gray-900 text-gray-500 uppercase text-[10px]">
+                        <tr>
+                            <th class="p-2 w-16">选择</th>
+                            <th class="p-2">模型</th>
+                            <th class="p-2 w-44">供应商</th>
+                            <th class="p-2 w-44">渠道</th>
+                            <th class="p-2 w-28">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="discovered-models-body"></tbody>
+                </table>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 border-t border-gray-800 p-4">
+                <div class="text-[12px] text-gray-500">绿色高亮表示本次勾选后将新增；已存在项不会重复添加。</div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" id="select-all-discovered-btn" class="px-3 py-1.5 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">全选新模型</button>
+                    <button type="button" id="clear-discovered-btn" class="px-3 py-1.5 rounded bg-gray-800 text-gray-200 hover:bg-gray-700">取消选择</button>
+                    <button type="button" id="apply-discovered-btn" class="px-3 py-1.5 rounded bg-green-700 text-white hover:bg-green-600">添加所选模型</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const state = { token: localStorage.getItem('adminToken') || '', config: null, fetchInterval: null, draggingRow: null, discoveredModels: [] };
         const $ = (id) => document.getElementById(id);
@@ -193,7 +224,8 @@
         $('close-modal-btn').addEventListener('click', () => $('modal').classList.add('hidden'));
         $('login-btn').addEventListener('click', login);
         $('discover-models-btn').addEventListener('click', discoverModels);
-        $('select-all-discovered-btn').addEventListener('click', () => setDiscoveredSelection(true));
+        $('close-discovered-btn').addEventListener('click', closeDiscoveredModelsDialog);
+        $('select-all-discovered-btn').addEventListener('click', selectNewDiscoveredModels);
         $('clear-discovered-btn').addEventListener('click', () => setDiscoveredSelection(false));
         $('apply-discovered-btn').addEventListener('click', applySelectedDiscoveredModels);
         $('add-provider-btn').addEventListener('click', () => {
@@ -477,27 +509,57 @@
             }
 
             panel.classList.remove('hidden');
+            renderDiscoveredSummary();
             body.innerHTML = '';
             state.discoveredModels.forEach((choice, index) => {
                 const row = document.createElement('tr');
-                row.className = 'border-t border-gray-800';
+                row.className = `border-t border-gray-800 ${discoveredRowClass(choice)}`;
                 row.innerHTML = `
                     <td class="p-2"><input data-discovered-index="${index}" type="checkbox" ${choice.selected ? 'checked' : ''}></td>
                     <td class="p-2 text-gray-100 font-mono">${escapeHtml(choice.model.name)}</td>
                     <td class="p-2">${escapeHtml(labelProvider(choice.model.provider))}</td>
                     <td class="p-2">${escapeHtml(labelChannel(choice.model.channel))}</td>
-                    <td class="p-2">${choice.exists ? '<span class="text-green-300">已存在</span>' : '<span class="text-gray-400">新发现</span>'}</td>
+                    <td class="p-2">${renderDiscoveredStatus(choice)}</td>
                 `;
                 row.querySelector('input').addEventListener('change', (event) => {
                     choice.selected = event.target.checked;
+                    renderDiscoveredModels();
                 });
                 body.appendChild(row);
             });
         }
 
+        function renderDiscoveredSummary() {
+            const summary = summarizeDiscoveredModelChoices(state.discoveredModels);
+            $('discovered-total-count').textContent = summary.total;
+            $('discovered-existing-count').textContent = summary.existing;
+            $('discovered-new-count').textContent = summary.fresh;
+            $('discovered-pending-count').textContent = summary.pendingAdd;
+        }
+
+        function discoveredRowClass(choice) {
+            if (!choice.exists && choice.selected) return 'discovery-row-pending';
+            return choice.exists ? 'discovery-row-existing' : 'discovery-row-new';
+        }
+
+        function renderDiscoveredStatus(choice) {
+            if (choice.exists) return '<span class="status-pill bg-green-900/40 text-green-200 border border-green-800/60">已存在</span>';
+            if (choice.selected) return '<span class="status-pill bg-emerald-900/50 text-emerald-100 border border-emerald-700/70">待添加</span>';
+            return '<span class="status-pill bg-blue-900/30 text-blue-200 border border-blue-800/50">新发现</span>';
+        }
+
         function setDiscoveredSelection(selected) {
             state.discoveredModels.forEach((choice) => { choice.selected = selected; });
             renderDiscoveredModels();
+        }
+
+        function selectNewDiscoveredModels() {
+            state.discoveredModels.forEach((choice) => { choice.selected = !choice.exists; });
+            renderDiscoveredModels();
+        }
+
+        function closeDiscoveredModelsDialog() {
+            $('discovered-models-panel').classList.add('hidden');
         }
 
         function applySelectedDiscoveredModels() {
@@ -711,7 +773,7 @@
                 seen.add(key);
                 const exists = existingKeys.has(key);
                 return { key, model: normalized, exists, selected: exists };
-            }).filter(Boolean);
+            }).filter(Boolean).sort(compareDiscoveredChoices);
         }
 
         function mergeSelectedDiscoveredModels(existingModels, choices) {
@@ -743,6 +805,16 @@
             ];
         }
 
+        function summarizeDiscoveredModelChoices(choices) {
+            return (choices || []).reduce((summary, choice) => {
+                summary.total += 1;
+                if (choice?.exists) summary.existing += 1;
+                else summary.fresh += 1;
+                if (!choice?.exists && choice?.selected) summary.pendingAdd += 1;
+                return summary;
+            }, { total: 0, existing: 0, fresh: 0, pendingAdd: 0 });
+        }
+
         function normalizeDiscoveredModel(model) {
             return {
                 name: String(model.name || '').trim(),
@@ -755,6 +827,11 @@
 
         function modelKey(model) {
             return `${String(model.name || '').trim()}_${String(model.channel || 'DEFAULT').trim()}`;
+        }
+
+        function compareDiscoveredChoices(left, right) {
+            if (left.exists !== right.exists) return left.exists ? 1 : -1;
+            return String(left.model.name || '').localeCompare(String(right.model.name || ''));
         }
 
         function sortModels(models) {
